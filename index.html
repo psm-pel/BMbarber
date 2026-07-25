@@ -2,8 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Viewport ajustado para móviles (evita zoom no deseado) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Panel de Control - BMbarber</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Phosphor Icons -->
@@ -16,14 +18,25 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #000000; color: #ffffff; }
-        .glass-panel { background: #000000; border: 1px solid #ffffff; }
-        .btn-active { background: #ffffff !important; color: #000000 !important; }
-        input, select { background: #000000 !important; border: 1px solid #ffffff !important; color: #ffffff !important; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #000000; }
-        ::-webkit-scrollbar-thumb { background: #ffffff; }
         
-        /* Animaciones para Notificaciones y Modales */
+        .glass-panel { background: #000000; border: 1px solid #ffffff; }
+        
+        /* Ajuste de botones activos para menú móvil */
+        .btn-active { background: #ffffff !important; color: #000000 !important; }
+        .btn-active i { color: #000000 !important; }
+        
+        input, select { background: #000000 !important; border: 1px solid #ffffff !important; color: #ffffff !important; }
+        
+        /* Ocultar scrollbar en móviles para que se vea más limpio */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        @media (min-width: 768px) {
+            ::-webkit-scrollbar { width: 6px; }
+            ::-webkit-scrollbar-thumb { background: #ffffff; border-radius: 0; }
+        }
+        
+        /* Animaciones */
         .toast-visible { transform: translate(-50%, 0) !important; opacity: 1 !important; }
         .modal-visible { opacity: 1 !important; pointer-events: auto !important; }
     </style>
@@ -135,181 +148,219 @@
         }
     </script>
 </head>
-<body class="h-screen flex overflow-hidden relative">
+<body class="h-screen flex overflow-hidden relative selection:bg-white selection:text-black">
 
     <!-- Notificación Toast -->
-    <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-white text-black px-6 py-3 text-xs font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] pointer-events-none">
+    <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-white text-black px-6 py-3 text-xs md:text-sm font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] pointer-events-none whitespace-nowrap text-center w-[90%] md:w-auto">
         Mensaje
     </div>
 
     <!-- Modal Confirmación -->
-    <div id="confirm-modal" class="fixed inset-0 z-[100] bg-black bg-opacity-90 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
-        <div class="glass-panel p-8 max-w-sm w-full mx-4 text-center">
-            <h3 class="text-sm font-light uppercase tracking-widest mb-8" id="confirm-message">¿Estás seguro?</h3>
+    <div id="confirm-modal" class="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel p-6 md:p-8 max-w-sm w-full mx-4 text-center">
+            <h3 class="text-xs md:text-sm font-light uppercase tracking-widest mb-8" id="confirm-message">¿Estás seguro?</h3>
             <div class="flex gap-4">
-                <button onclick="window.cerrarConfirmacion(false)" class="flex-1 border border-white py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-800 transition-colors">Cancelar</button>
-                <button onclick="window.cerrarConfirmacion(true)" class="flex-1 bg-white text-black py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-300 transition-colors">Aceptar</button>
+                <button onclick="window.cerrarConfirmacion(false)" class="flex-1 border border-white py-3 md:py-4 uppercase text-[10px] md:text-xs font-bold tracking-widest hover:bg-gray-900 transition-colors">Cancelar</button>
+                <button onclick="window.cerrarConfirmacion(true)" class="flex-1 bg-white text-black py-3 md:py-4 uppercase text-[10px] md:text-xs font-bold tracking-widest hover:bg-gray-300 transition-colors">Aceptar</button>
             </div>
         </div>
     </div>
 
     <!-- Login -->
     <div id="login-screen" class="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center">
-        <div class="glass-panel p-12 flex flex-col items-center gap-8 w-full max-w-sm mx-4">
-            <img src="./logobm.jpg" alt="Logo BMbarber" class="w-32 h-32 border-2 border-white object-cover">
-            <h1 class="text-3xl font-light uppercase tracking-[0.2em]">BMbarber</h1>
+        <div class="glass-panel p-8 md:p-12 flex flex-col items-center gap-6 md:gap-8 w-full max-w-sm mx-4">
+            <img src="./581631858_17901193836297709.png" alt="Logo BMbarber" class="w-24 h-24 md:w-32 md:h-32 rounded-full border border-white object-cover">
+            <h1 class="text-2xl md:text-3xl font-light uppercase tracking-[0.2em] text-center">BMbarber</h1>
             <div class="w-full">
-                <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-4 text-center tracking-[0.2em] text-sm uppercase placeholder:tracking-normal placeholder:text-gray-600 transition-colors focus:border-gray-400">
-                <p id="login-error" class="text-white text-xs mt-3 text-center opacity-0 transition-opacity">Contraseña incorrecta</p>
+                <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-4 text-center tracking-[0.2em] text-xs md:text-sm uppercase placeholder:tracking-normal placeholder:text-gray-600 transition-colors focus:border-gray-400">
+                <p id="login-error" class="text-white text-[10px] md:text-xs mt-3 text-center opacity-0 transition-opacity">Contraseña incorrecta</p>
             </div>
-            <button onclick="window.attemptLogin()" class="w-full border border-white hover:bg-white hover:text-black transition-all py-4 uppercase font-bold text-xs tracking-[0.2em]">Ingresar</button>
+            <button onclick="window.attemptLogin()" class="w-full border border-white hover:bg-white hover:text-black transition-all py-4 uppercase font-bold text-[10px] md:text-xs tracking-[0.2em]">Ingresar</button>
         </div>
     </div>
 
-    <nav class="border-r border-white w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-black">
+    <!-- Navbar Móvil: Translúcida, anclada abajo, diseño tipo app -->
+    <!-- Navbar Desktop: Columna lateral, sólida -->
+    <nav class="border-t border-white/20 md:border-t-0 md:border-r md:border-white w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-black/80 backdrop-blur-xl md:bg-black pb-safe">
+        
+        <!-- Logo solo visible en Desktop -->
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-white">
-            <img src="./logobm.jpg" alt="Logo BMbarber" class="w-24 h-24 border-2 border-white object-cover">
-            <h1 class="text-lg font-light uppercase tracking-[0.2em]">BMbarber</h1>
+            <img src="./logobm.jpg" alt="Logo BMbarber" class="w-24 h-24 rounded-full border border-white object-cover">
+            <h1 class="text-lg font-light uppercase tracking-[0.2em] text-center">BMbarber</h1>
         </div>
-        <div class="flex md:flex-col w-full md:mt-6 p-2 gap-2">
-            <button onclick="window.navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
-                <i class="ph ph-scissors text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Caja</span>
+        
+        <!-- Botones de navegación (Ajustados para celular) -->
+        <div class="flex flex-row md:flex-col w-full md:mt-6 p-1 md:p-2 gap-1 md:gap-2">
+            <button onclick="window.navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-white/10 md:hover:bg-white md:hover:text-black transition-all group">
+                <i class="ph ph-scissors text-2xl group-hover:text-white md:group-hover:text-black"></i> 
+                <span class="text-[10px] md:text-xs uppercase font-bold tracking-widest mt-1 md:mt-0 group-hover:text-white md:group-hover:text-black">Caja</span>
             </button>
-            <button onclick="window.navigate('historial')" id="nav-historial" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
-                <i class="ph ph-clock text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Historial</span>
+            <button onclick="window.navigate('historial')" id="nav-historial" class="nav-btn flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-white/10 md:hover:bg-white md:hover:text-black transition-all group">
+                <i class="ph ph-clock text-2xl text-gray-400 group-hover:text-white md:group-hover:text-black"></i> 
+                <span class="text-[10px] md:text-xs uppercase font-bold tracking-widest mt-1 md:mt-0 text-gray-400 group-hover:text-white md:group-hover:text-black">Historial</span>
             </button>
-            <button onclick="window.navigate('gastos')" id="nav-gastos" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
-                <i class="ph ph-gear text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Ajustes</span>
+            <button onclick="window.navigate('gastos')" id="nav-gastos" class="nav-btn flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-white/10 md:hover:bg-white md:hover:text-black transition-all group">
+                <i class="ph ph-gear text-2xl text-gray-400 group-hover:text-white md:group-hover:text-black"></i> 
+                <span class="text-[10px] md:text-xs uppercase font-bold tracking-widest mt-1 md:mt-0 text-gray-400 group-hover:text-white md:group-hover:text-black">Ajustes</span>
             </button>
-            <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
-                <i class="ph ph-chart-line text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Balance</span>
+            <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-white/10 md:hover:bg-white md:hover:text-black transition-all group">
+                <i class="ph ph-chart-line text-2xl text-gray-400 group-hover:text-white md:group-hover:text-black"></i> 
+                <span class="text-[10px] md:text-xs uppercase font-bold tracking-widest mt-1 md:mt-0 text-gray-400 group-hover:text-white md:group-hover:text-black">Balance</span>
             </button>
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube -->
-    <a href="https://wa.me/543454956044" target="_blank" class="fixed bottom-20 md:bottom-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105 hidden md:flex">
-        <span class="text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1">by: PSM</span>
+    <!-- Marca de Agua Fija (Oculta en celular para no molestar) -->
+    <a href="https://wa.me/543454956044" target="_blank" class="fixed bottom-4 left-4 z-50 items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105 hidden md:flex">
+        <img src="./psm.png" alt="Logo PSM" class="w-8 h-8 rounded-full border border-white object-cover">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1 bg-black">by: PSM</span>
     </a>
 
-    <!-- Indicador Nube -->
-    <div id="cloud-status" class="fixed bottom-20 md:bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-1 border border-white bg-black opacity-80 cursor-default" title="Conectando...">
-        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-white text-lg transition-colors duration-300"></i>
-        <span id="cloud-text" class="text-[10px] font-bold uppercase tracking-widest text-white transition-colors duration-300">Cargando</span>
+    <!-- Indicador Nube (Arriba a la derecha en celular, abajo a la derecha en PC) -->
+    <div id="cloud-status" class="fixed top-4 right-4 md:top-auto md:bottom-4 md:right-4 z-[60] flex items-center gap-2 px-3 py-2 md:py-1 border border-white bg-black/90 md:bg-black opacity-90 cursor-default shadow-lg md:shadow-none backdrop-blur-sm md:backdrop-blur-none" title="Conectando...">
+        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-white text-sm md:text-lg transition-colors duration-300"></i>
+        <span id="cloud-text" class="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-white transition-colors duration-300">Cargando</span>
     </div>
 
-    <main class="flex-1 h-full overflow-y-auto p-4 md:p-12 pb-24 md:pb-8">
+    <!-- Contenedor Principal (Con padding inferior amplio en móvil para evitar que la barra de navegación tape contenido) -->
+    <main class="flex-1 h-full overflow-y-auto p-4 pt-16 md:pt-12 md:p-12 pb-[100px] md:pb-8 w-full relative">
         
         <!-- VISTA CAJA -->
-        <div id="view-caja" class="view-section max-w-lg mx-auto">
-            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Nueva Operación</h2>
-            <div class="glass-panel p-8">
-                <label class="block text-xs uppercase tracking-widest mb-2">Servicio Realizado</label>
-                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
+        <div id="view-caja" class="view-section max-w-lg mx-auto w-full">
+            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Nueva Operación</h2>
+            <div class="glass-panel p-6 md:p-8">
+                <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Servicio Realizado</label>
+                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-5 md:mb-6 outline-none text-xs md:text-sm appearance-none rounded-none focus:border-gray-400 transition-colors cursor-pointer">
                     <option value="corte_pelo">Corte de Pelo</option>
                     <option value="corte_barba">Corte de Pelo + Barba</option>
                 </select>
                 
-                <label class="block text-xs uppercase tracking-widest mb-2">Método de Pago</label>
-                <select id="caja-metodo" class="w-full p-4 mb-6 outline-none text-sm">
+                <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Método de Pago</label>
+                <select id="caja-metodo" class="w-full p-4 mb-5 md:mb-6 outline-none text-xs md:text-sm appearance-none rounded-none focus:border-gray-400 transition-colors cursor-pointer">
                     <option value="efectivo">Efectivo (En negro)</option>
                     <option value="tarjeta">Tarjeta / Transferencia (Blanco)</option>
                 </select>
 
-                <label class="block text-xs uppercase tracking-widest mb-2">Monto a Cobrar (ARS)</label>
-                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-light" readonly>
+                <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Monto a Cobrar (ARS)</label>
+                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-xl md:text-2xl font-light text-center md:text-left rounded-none" readonly>
                 
-                <button onclick="window.registrarOperacion()" class="w-full bg-white text-black font-bold py-4 uppercase tracking-[0.2em] hover:bg-gray-300 transition-all">Registrar Corte</button>
+                <button onclick="window.registrarOperacion()" class="w-full bg-white text-black font-bold py-4 md:py-5 uppercase text-[10px] md:text-xs tracking-[0.2em] hover:bg-gray-300 transition-all active:scale-95">Registrar Corte</button>
             </div>
         </div>
 
         <!-- VISTA HISTORIAL -->
-        <div id="view-historial" class="view-section hidden max-w-4xl mx-auto">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
-                <h2 class="text-4xl font-light tracking-tighter uppercase">Historial</h2>
-                <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-sm outline-none border-white">
+        <div id="view-historial" class="view-section hidden max-w-4xl mx-auto w-full">
+            <div class="flex flex-col md:flex-row justify-between items-center md:items-end mb-6 md:mb-10 gap-4">
+                <h2 class="text-2xl md:text-4xl font-light tracking-tighter uppercase w-full text-center md:text-left">Historial</h2>
+                <select id="filtro-historial" onchange="window.actualizarUI()" class="p-3 md:p-2 text-xs md:text-sm outline-none border border-white bg-black text-white w-full md:w-auto appearance-none text-center md:text-left cursor-pointer rounded-none">
                     <option value="hoy">Solo Hoy</option>
                     <option value="mes" selected>Este Mes</option>
                     <option value="todo">Todo el Historial</option>
                 </select>
             </div>
-            <div class="glass-panel overflow-x-auto">
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="border-b border-white uppercase text-xs tracking-widest">
-                            <th class="p-4 font-normal">Fecha</th>
-                            <th class="p-4 font-normal">Servicio</th>
-                            <th class="p-4 font-normal text-center">Método</th>
-                            <th class="p-4 font-normal text-right">Monto</th>
-                            <th class="p-4 font-normal text-center">Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody id="historial-body" class="text-sm"></tbody>
-                </table>
+            
+            <div class="glass-panel w-full">
+                <!-- En móviles, el overflow-x-auto permite deslizar la tabla horizontalmente sin romper el diseño -->
+                <div class="w-full overflow-x-auto">
+                    <table class="w-full text-left min-w-[500px] md:min-w-full">
+                        <thead>
+                            <tr class="border-b border-white/50 uppercase text-[10px] md:text-xs tracking-widest text-gray-400 bg-white/5">
+                                <th class="p-3 md:p-4 font-normal">Fecha</th>
+                                <th class="p-3 md:p-4 font-normal">Servicio</th>
+                                <th class="p-3 md:p-4 font-normal text-center">Pago</th>
+                                <th class="p-3 md:p-4 font-normal text-right">Monto</th>
+                                <th class="p-3 md:p-4 font-normal text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historial-body" class="text-xs md:text-sm"></tbody>
+                    </table>
+                </div>
             </div>
-            <div class="mt-6 flex justify-end">
-                <div class="glass-panel p-4 inline-block">
-                    <span class="text-xs uppercase tracking-widest mr-4">Total Vista:</span>
-                    <span id="historial-total" class="text-2xl font-light">$0</span>
+            
+            <div class="mt-6 flex justify-center md:justify-end">
+                <div class="glass-panel p-4 md:p-5 flex items-center justify-between w-full md:w-auto gap-8">
+                    <span class="text-[10px] md:text-xs uppercase tracking-widest text-gray-300">Total Vista:</span>
+                    <span id="historial-total" class="text-xl md:text-2xl font-light">$0</span>
                 </div>
             </div>
         </div>
 
         <!-- VISTA AJUSTES -->
-        <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto">
-            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Ajustes y Gastos</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="glass-panel p-6">
-                    <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-white pb-2">Precios de Servicios</h3>
-                    <label class="block text-xs uppercase tracking-widest mb-2 mt-4">Corte de Pelo (ARS)</label>
-                    <input type="number" id="precio-pelo" class="w-full p-3 mb-4 outline-none">
-                    <label class="block text-xs uppercase tracking-widest mb-2">Corte + Barba (ARS)</label>
-                    <input type="number" id="precio-barba" class="w-full p-3 mb-6 outline-none">
-                    <button onclick="window.guardarPrecios()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Precios</button>
+        <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto w-full">
+            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Ajustes</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                <div class="glass-panel p-5 md:p-6">
+                    <h3 class="text-xs md:text-sm uppercase tracking-widest mb-6 border-b border-white/30 pb-3 text-center md:text-left">Precios de Servicios</h3>
+                    
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 mt-2 text-gray-300">Corte de Pelo (ARS)</label>
+                    <input type="number" id="precio-pelo" class="w-full p-3 mb-4 outline-none text-center md:text-left text-sm focus:border-gray-400 rounded-none transition-colors">
+                    
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Corte + Barba (ARS)</label>
+                    <input type="number" id="precio-barba" class="w-full p-3 mb-6 outline-none text-center md:text-left text-sm focus:border-gray-400 rounded-none transition-colors">
+                    
+                    <button onclick="window.guardarPrecios()" class="w-full border border-white hover:bg-white hover:text-black py-4 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all active:scale-95">Actualizar Precios</button>
                 </div>
-                <div class="glass-panel p-6">
-                    <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-white pb-2">Gastos Fijos Mensuales</h3>
-                    <label class="block text-xs uppercase tracking-widest mb-2">Alquiler (ARS)</label>
-                    <input type="number" id="gasto-alquiler" class="w-full p-3 mb-4 outline-none">
-                    <label class="block text-xs uppercase tracking-widest mb-2">Luz (ARS)</label>
-                    <input type="number" id="gasto-luz" class="w-full p-3 mb-4 outline-none">
-                    <label class="block text-xs uppercase tracking-widest mb-2">Internet / WiFi (ARS)</label>
-                    <input type="number" id="gasto-internet" class="w-full p-3 mb-4 outline-none">
-                    <label class="block text-xs uppercase tracking-widest mb-2">Monotributo (ARS)</label>
-                    <input type="number" id="gasto-monotributo" class="w-full p-3 mb-6 outline-none">
-                    <button onclick="window.guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
+                
+                <div class="glass-panel p-5 md:p-6">
+                    <h3 class="text-xs md:text-sm uppercase tracking-widest mb-6 border-b border-white/30 pb-3 text-center md:text-left">Gastos Fijos Mensuales</h3>
+                    
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Alquiler (ARS)</label>
+                    <input type="number" id="gasto-alquiler" class="w-full p-3 mb-4 outline-none text-center md:text-left text-sm focus:border-gray-400 rounded-none transition-colors">
+                    
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Luz (ARS)</label>
+                    <input type="number" id="gasto-luz" class="w-full p-3 mb-4 outline-none text-center md:text-left text-sm focus:border-gray-400 rounded-none transition-colors">
+                    
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Internet / WiFi (ARS)</label>
+                    <input type="number" id="gasto-internet" class="w-full p-3 mb-4 outline-none text-center md:text-left text-sm focus:border-gray-400 rounded-none transition-colors">
+                    
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Monotributo (ARS)</label>
+                    <input type="number" id="gasto-monotributo" class="w-full p-3 mb-6 outline-none text-center md:text-left text-sm focus:border-gray-400 rounded-none transition-colors">
+                    
+                    <button onclick="window.guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-4 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all active:scale-95">Actualizar Gastos</button>
                 </div>
             </div>
         </div>
 
         <!-- VISTA BALANCE -->
-        <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
-            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Balance del Mes Actual</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="glass-panel p-6 text-center">
-                    <p class="text-xs uppercase tracking-widest mb-2">Ingresos del Mes</p>
-                    <p id="bal-ingresos" class="text-3xl font-light mb-2">$0</p>
-                    <div class="flex justify-between text-[10px] text-gray-400 border-t border-gray-800 pt-2 uppercase tracking-widest mt-2">
-                        <span title="Ingresos en Negro">Efec: <b id="bal-ingresos-efectivo" class="text-white">$0</b></span>
-                        <span title="Ingresos en Blanco">Tarj/Transf: <b id="bal-ingresos-tarjeta" class="text-white">$0</b></span>
+        <div id="view-balance" class="view-section hidden max-w-4xl mx-auto w-full">
+            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Balance Mensual</h2>
+            
+            <!-- Grid de tarjetas de balance -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+                
+                <div class="glass-panel p-5 md:p-6 text-center flex flex-col justify-center">
+                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Ingresos del Mes</p>
+                    <p id="bal-ingresos" class="text-2xl md:text-3xl font-light mb-3 text-green-400">$0</p>
+                    <div class="flex flex-col gap-1 text-[9px] md:text-[10px] text-gray-400 border-t border-gray-800 pt-3 uppercase tracking-widest">
+                        <div class="flex justify-between w-full">
+                            <span>Efec:</span> 
+                            <b id="bal-ingresos-efectivo" class="text-white">$0</b>
+                        </div>
+                        <div class="flex justify-between w-full">
+                            <span>Tarj/Transf:</span> 
+                            <b id="bal-ingresos-tarjeta" class="text-white">$0</b>
+                        </div>
                     </div>
                 </div>
-                <div class="glass-panel p-6 text-center">
-                    <p class="text-xs uppercase tracking-widest mb-2">Gastos Fijos</p>
-                    <p id="bal-gastos" class="text-3xl font-light">$0</p>
+                
+                <div class="glass-panel p-5 md:p-6 text-center flex flex-col justify-center">
+                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-2 text-gray-300">Gastos Fijos</p>
+                    <p id="bal-gastos" class="text-2xl md:text-3xl font-light text-red-400">$0</p>
                 </div>
-                <div class="glass-panel p-6 text-center bg-white text-black transition-colors" id="bal-caja-estado">
-                    <p class="text-xs uppercase tracking-widest mb-2 font-bold text-black" id="bal-label-estado">Estado (Ganancia Libre)</p>
-                    <p id="bal-estado" class="text-3xl font-bold">$0</p>
+                
+                <div class="glass-panel p-5 md:p-6 text-center bg-white text-black transition-colors flex flex-col justify-center sm:col-span-2 md:col-span-1" id="bal-caja-estado">
+                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold" id="bal-label-estado">Estado</p>
+                    <p id="bal-estado" class="text-2xl md:text-3xl font-bold">$0</p>
                 </div>
             </div>
-            <div class="glass-panel p-8">
-                <h3 class="text-sm uppercase tracking-widest mb-6">Progreso para cubrir gastos</h3>
-                <div class="w-full h-8 border border-white p-1 relative mb-4">
+            
+            <div class="glass-panel p-6 md:p-8">
+                <h3 class="text-xs md:text-sm uppercase tracking-widest mb-5 md:mb-6 text-center md:text-left">Progreso de Rentabilidad</h3>
+                <div class="w-full h-6 md:h-8 border border-white p-1 relative mb-4">
                     <div id="bal-barra" class="h-full bg-white transition-all duration-1000 w-0"></div>
-                    <div id="bal-porcentaje" class="absolute inset-0 flex items-center justify-center text-xs font-bold mix-blend-difference text-white">0%</div>
+                    <div id="bal-porcentaje" class="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs font-bold mix-blend-difference text-white">0%</div>
                 </div>
-                <p id="bal-mensaje" class="text-center text-sm uppercase tracking-widest mt-6"></p>
+                <p id="bal-mensaje" class="text-center text-[10px] md:text-sm uppercase tracking-widest mt-4 md:mt-6 text-gray-300"></p>
             </div>
         </div>
     </main>
@@ -348,13 +399,13 @@
             const icon = document.getElementById('cloud-icon');
             const text = document.getElementById('cloud-text');
             if(conectado) {
-                icon.className = "ph ph-cloud-check text-green-500 text-lg transition-colors duration-300";
-                text.className = "text-[10px] font-bold uppercase tracking-widest text-green-500 transition-colors duration-300";
+                icon.className = "ph ph-cloud-check text-green-500 text-sm md:text-lg transition-colors duration-300";
+                text.className = "text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-green-500 transition-colors duration-300";
                 text.textContent = "Online";
                 document.getElementById('cloud-status').title = "Conectado a Firebase";
             } else {
-                icon.className = "ph ph-cloud-slash text-red-500 text-lg transition-colors duration-300";
-                text.className = "text-[10px] font-bold uppercase tracking-widest text-red-500 transition-colors duration-300";
+                icon.className = "ph ph-cloud-slash text-red-500 text-sm md:text-lg transition-colors duration-300";
+                text.className = "text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-red-500 transition-colors duration-300";
                 text.textContent = "Local";
                 document.getElementById('cloud-status').title = "Modo sin conexión (Guardando localmente)";
             }
@@ -375,9 +426,27 @@
 
         window.navigate = function(viewName) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('btn-active'));
+            
+            // Restablecer estilos de botones inactivos
+            document.querySelectorAll('.nav-btn').forEach(el => {
+                el.classList.remove('btn-active');
+                const icon = el.querySelector('i');
+                const text = el.querySelector('span');
+                if(icon) { icon.classList.remove('text-black'); icon.classList.add('text-gray-400'); }
+                if(text) { text.classList.remove('text-black'); text.classList.add('text-gray-400'); }
+            });
+            
+            // Mostrar vista activa
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
-            document.getElementById(`nav-${viewName}`).classList.add('btn-active');
+            
+            // Estilizar botón activo
+            const activeBtn = document.getElementById(`nav-${viewName}`);
+            activeBtn.classList.add('btn-active');
+            const activeIcon = activeBtn.querySelector('i');
+            const activeText = activeBtn.querySelector('span');
+            if(activeIcon) { activeIcon.classList.remove('text-gray-400'); activeIcon.classList.add('text-black'); }
+            if(activeText) { activeText.classList.remove('text-gray-400'); activeText.classList.add('text-black'); }
+            
             window.actualizarUI();
         };
 
@@ -428,7 +497,6 @@
             const barba = parseFloat(document.getElementById('precio-barba').value) || 0;
             window.localState.precios = { "corte_pelo": pelo, "corte_barba": barba };
             
-            // Forzar actualización inmediata visual (Resuelve el problema anterior)
             window.actualizarUI();
             
             if (isFirebaseActive && auth && auth.currentUser) {
@@ -438,11 +506,11 @@
                     window.mostrarNotificacion("Precios Actualizados (Nube)");
                 } catch (e) {
                     window.guardarLocal();
-                    window.mostrarNotificacion("Precios Actualizados (Local)");
+                    window.mostrarNotificacion("Precios Guardados (Local)");
                 }
             } else {
                 window.guardarLocal();
-                window.mostrarNotificacion("Precios Actualizados (Local)");
+                window.mostrarNotificacion("Precios Guardados (Local)");
             }
         };
 
@@ -455,7 +523,6 @@
             };
             window.localState.gastos = gastos;
             
-            // Forzar actualización inmediata visual
             window.actualizarUI();
             
             if (isFirebaseActive && auth && auth.currentUser) {
@@ -465,11 +532,11 @@
                     window.mostrarNotificacion("Gastos Actualizados (Nube)");
                 } catch (e) {
                     window.guardarLocal();
-                    window.mostrarNotificacion("Gastos Actualizados (Local)");
+                    window.mostrarNotificacion("Gastos Guardados (Local)");
                 }
             } else {
                 window.guardarLocal();
-                window.mostrarNotificacion("Gastos Actualizados (Local)");
+                window.mostrarNotificacion("Gastos Guardados (Local)");
             }
         };
 
@@ -520,20 +587,19 @@
                 cortesFiltrados.forEach(corte => {
                     totalVista += corte.monto;
                     
-                    // Determinar ícono de método (Efectivo/Tarjeta)
-                    const metodoIcon = corte.metodoPago === 'tarjeta' ? '<i class="ph ph-credit-card text-lg" title="Tarjeta/Transferencia"></i>' : '<i class="ph ph-money text-lg" title="Efectivo"></i>';
+                    const metodoIcon = corte.metodoPago === 'tarjeta' ? '<i class="ph ph-credit-card text-sm md:text-lg" title="Tarjeta/Transferencia"></i>' : '<i class="ph ph-money text-sm md:text-lg" title="Efectivo"></i>';
                     const metodoClass = corte.metodoPago === 'tarjeta' ? 'text-gray-400' : 'text-white';
 
                     const tr = document.createElement('tr');
-                    tr.className = 'border-b border-gray-800 hover:bg-gray-900 transition-colors';
+                    tr.className = 'border-b border-gray-800/50 hover:bg-gray-900 transition-colors';
                     tr.innerHTML = `
-                        <td class="p-4 text-xs">${formatearFecha(corte.timestamp)}</td>
-                        <td class="p-4">${getNombreServicio(corte.tipo)}</td>
-                        <td class="p-4 text-center ${metodoClass}">${metodoIcon}</td>
-                        <td class="p-4 text-right font-bold">${formatMoney(corte.monto)}</td>
-                        <td class="p-4 text-center">
-                            <button onclick="window.borrarRegistro('${corte.id}')" class="text-gray-500 hover:text-white transition-colors" title="Eliminar">
-                                <i class="ph ph-trash text-lg"></i>
+                        <td class="p-3 md:p-4 text-[10px] md:text-xs text-gray-300 whitespace-nowrap">${formatearFecha(corte.timestamp)}</td>
+                        <td class="p-3 md:p-4 text-xs md:text-sm whitespace-nowrap">${getNombreServicio(corte.tipo)}</td>
+                        <td class="p-3 md:p-4 text-center ${metodoClass}">${metodoIcon}</td>
+                        <td class="p-3 md:p-4 text-right font-bold whitespace-nowrap">${formatMoney(corte.monto)}</td>
+                        <td class="p-3 md:p-4 text-center">
+                            <button onclick="window.borrarRegistro('${corte.id}')" class="text-gray-500 hover:text-white transition-colors active:scale-90" title="Eliminar">
+                                <i class="ph ph-trash text-lg md:text-xl"></i>
                             </button>
                         </td>
                     `;
@@ -542,7 +608,7 @@
 
                 if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
 
-                // Actualizar Balance (Con Desglose Efectivo/Tarjeta)
+                // Actualizar Balance
                 const cortesMes = window.localState.cortes.filter(corte => {
                     const fechaCorte = new Date(corte.timestamp);
                     return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
@@ -571,13 +637,13 @@
                         cajaEstado.classList.add('bg-black', 'text-white', 'border', 'border-white');
                         balLabel.classList.remove('text-black');
                         balLabel.classList.add('text-white');
-                        balLabel.textContent = "Estado (Falta para cubrir)";
+                        balLabel.textContent = "Falta Cubrir";
                     } else {
                         cajaEstado.classList.remove('bg-black', 'text-white', 'border', 'border-white');
                         cajaEstado.classList.add('bg-white', 'text-black');
                         balLabel.classList.remove('text-white');
                         balLabel.classList.add('text-black');
-                        balLabel.textContent = "Estado (Ganancia Libre)";
+                        balLabel.textContent = "Ganancia Libre";
                     }
                 }
 
@@ -592,9 +658,11 @@
                 const mensajeEl = document.getElementById('bal-mensaje');
                 if(mensajeEl) {
                     if (estado >= 0) {
-                        mensajeEl.textContent = "¡Gastos fijos cubiertos! Ya estás generando ganancias.";
+                        mensajeEl.textContent = "¡Gastos cubiertos! Ya estás generando ganancias.";
+                        mensajeEl.className = "text-center text-[10px] md:text-sm uppercase tracking-widest mt-4 md:mt-6 text-green-400";
                     } else {
-                        mensajeEl.textContent = `Faltan ${formatMoney(Math.abs(estado))} para cubrir los gastos del mes.`;
+                        mensajeEl.textContent = `Faltan ${formatMoney(Math.abs(estado))} para cubrir los gastos.`;
+                        mensajeEl.className = "text-center text-[10px] md:text-sm uppercase tracking-widest mt-4 md:mt-6 text-gray-300";
                     }
                 }
             } catch(e) {
