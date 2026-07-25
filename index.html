@@ -86,20 +86,21 @@
         }
 
         async function cargarDatosInicialesFirebase() {
-            if(!db) return; // Ya no dependemos del UID para la sincronización cruzada
+            if(!db) return; // Quitamos la dependencia de auth.currentUser
             
             try {
-                // Leemos y escribimos en una ruta global unificada para sincronizar entre todos tus dispositivos
+                // Apuntamos todos los dispositivos a la MISMA ruta global
                 const docPrecios = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").get();
                 if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
                 
                 const docGastos = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").get();
                 if(docGastos.exists) { window.localState.gastos = docGastos.data(); }
             } catch(e) {
-                console.error("Error leyendo Firestore config:", e);
+                console.error("Error leyendo Firestore:", e);
             }
 
             try {
+                // Suscripción a la ruta global
                 db.collection("barberias").doc("bmbarber_global").collection("cortes")
                 .orderBy("timestamp", "desc")
                 .onSnapshot((snapshot) => {
@@ -418,7 +419,7 @@
 
             const nuevaOperacion = { tipo: tipo, metodoPago: metodo, monto: monto, timestamp: Date.now() };
 
-            if (isFirebaseActive && db) {
+            if (isFirebaseActive && db) { // Quitamos auth y uid
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("cortes").add(nuevaOperacion);
                     window.mostrarNotificacion("Corte Registrado (Nube)");
@@ -446,7 +447,7 @@
             
             window.actualizarUI();
             
-            if (isFirebaseActive && db) {
+            if (isFirebaseActive && db) { // Quitamos auth y uid
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").set(window.localState.precios);
                     window.mostrarNotificacion("Precios Actualizados (Nube)");
@@ -471,7 +472,7 @@
             
             window.actualizarUI();
             
-            if (isFirebaseActive && db) {
+            if (isFirebaseActive && db) { // Quitamos auth y uid
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").set(window.localState.gastos);
                     window.mostrarNotificacion("Gastos Actualizados (Nube)");
@@ -611,7 +612,7 @@
 
         window.borrarRegistro = async function(id) {
             window.abrirConfirmacion("¿Seguro que deseas eliminar este registro?", async () => {
-                if (isFirebaseActive && db) {
+                if (isFirebaseActive && db) { // Quitamos auth y uid
                     try {
                         await db.collection("barberias").doc("bmbarber_global").collection("cortes").doc(id).delete();
                         window.mostrarNotificacion("Corte Eliminado (Nube)");
@@ -627,6 +628,7 @@
                 }
             });
         };
+
     </script>
 </body>
 </html>
