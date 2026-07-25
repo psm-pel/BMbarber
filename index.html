@@ -50,7 +50,8 @@
         window.localState = {
             cortes: [],
             precios: { "corte_pelo": 5000, "corte_barba": 7000 },
-            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0, otros: 0 }
+            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0, otros: 0 },
+            inicioPeriodo: null
         };
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -95,8 +96,11 @@
                 
                 const docGastos = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").get();
                 if(docGastos.exists) { window.localState.gastos = docGastos.data(); }
+                
+                const docGeneral = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("general").get();
+                if(docGeneral.exists) { window.localState.inicioPeriodo = docGeneral.data().inicioPeriodo; }
             } catch(e) {
-                console.error("Error leyendo Firestore:", e);
+                console.error("Error leyendo Firestore config:", e);
             }
 
             try {
@@ -190,13 +194,13 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube - Ahora visible en móvil y reposicionada -->
+    <!-- Marca de Agua y Nube - Ahora visible SIEMPRE (quitamos hidden md:flex) -->
     <a href="https://wa.me/543454956044" target="_blank" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:left-4 md:right-auto z-50 flex items-center gap-2 md:gap-3 opacity-60 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
         <img src="./psm.png" alt="Logo PSM" onerror="this.src='https://placehold.co/128x128/ffffff/000000?text=PSM'" class="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white object-cover">
         <span class="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1 bg-black/50 backdrop-blur-sm">by: PSM</span>
     </a>
 
-    <!-- Indicador Nube - Bajado para no tapar títulos -->
+    <!-- Indicador Nube - Reubicado a la esquina inferior derecha -->
     <div id="cloud-status" class="fixed bottom-20 right-2 md:bottom-4 md:right-4 z-50 flex items-center gap-2 px-2 py-1 md:px-3 border border-white bg-black opacity-90 cursor-default shadow-lg">
         <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-white text-sm md:text-lg transition-colors duration-300"></i>
         <span id="cloud-text" class="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-white transition-colors duration-300">Cargando</span>
@@ -209,20 +213,20 @@
             <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Nueva Operación</h2>
             <div class="glass-panel p-8">
                 <label class="block text-xs uppercase tracking-widest mb-2">Servicio Realizado</label>
-                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
+                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer">
                     <option value="corte_pelo">Corte de Pelo</option>
                     <option value="corte_barba">Corte de Pelo + Barba</option>
                 </select>
                 
                 <label class="block text-xs uppercase tracking-widest mb-2">Método de Pago</label>
-                <select id="caja-metodo" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
+                <select id="caja-metodo" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer">
                     <option value="efectivo">Efectivo (En negro)</option>
                     <option value="tarjeta">Tarjeta / Transferencia (Blanco)</option>
                     <option value="amigo">Precio Amigo (Manual)</option>
                 </select>
 
                 <label class="block text-xs uppercase tracking-widest mb-2">Monto a Cobrar (ARS)</label>
-                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-light" readonly>
+                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-light focus:border-gray-400" readonly>
                 <button onclick="window.registrarOperacion()" class="w-full bg-white text-black font-bold py-3 md:py-4 uppercase text-[10px] md:text-xs tracking-widest hover:bg-gray-300 transition-all">Registrar Corte</button>
             </div>
         </div>
@@ -233,7 +237,7 @@
                 <h2 class="text-2xl md:text-4xl font-light tracking-tighter uppercase">Historial</h2>
                 <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-xs md:text-sm outline-none border-white w-full md:w-auto">
                     <option value="hoy">Solo Hoy</option>
-                    <option value="mes" selected>Este Mes</option>
+                    <option value="mes" selected>Periodo Actual</option>
                     <option value="todo">Todo el Historial</option>
                 </select>
             </div>
@@ -291,7 +295,7 @@
 
         <!-- VISTA BALANCE -->
         <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
-            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Balance del Mes Actual</h2>
+            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Balance del Periodo Actual</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="glass-panel p-6 text-center relative">
                     <div class="flex justify-center items-center gap-2 mb-2">
@@ -311,13 +315,21 @@
                     <p id="bal-gasto-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-70">(Gasto Total: $0)</p>
                 </div>
             </div>
-            <div class="glass-panel p-5 md:p-8">
+            
+            <div class="glass-panel p-5 md:p-8 mb-8">
                 <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-4 md:mb-6">Progreso para cubrir gastos</h3>
                 <div class="w-full h-6 md:h-8 border border-white p-1 relative mb-3 md:mb-4">
                     <div id="bal-barra" class="h-full bg-white transition-all duration-1000 w-0"></div>
                     <div id="bal-porcentaje" class="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs font-bold mix-blend-difference text-white">0%</div>
                 </div>
                 <p id="bal-mensaje" class="text-center text-[9px] md:text-sm uppercase tracking-widest mt-4 md:mt-6"></p>
+            </div>
+
+            <!-- Boton de Finalizar Mes -->
+            <div class="glass-panel p-6 md:p-8 flex flex-col items-center justify-center text-center">
+                <h3 class="text-sm uppercase tracking-widest mb-3 text-white font-bold"><i class="ph ph-calendar-check mr-2"></i>¿Cerrar el ciclo actual?</h3>
+                <p class="text-[10px] md:text-xs text-gray-400 mb-6 max-w-lg leading-relaxed">Al finalizar el mes, tu balance y el contador de cortes <b>volverán a cero</b> para que puedas iniciar un nuevo periodo contable limpio. Toda la información anterior no se borrará: seguirá guardada y disponible en la pestaña "Historial".</p>
+                <button onclick="window.finalizarMes()" class="w-full md:w-auto border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all py-3 px-8 uppercase font-bold text-[10px] md:text-xs tracking-widest">Finalizar Mes</button>
             </div>
         </div>
     </main>
@@ -397,6 +409,7 @@
             
             if (metodo === 'amigo') {
                 inputMonto.readOnly = false;
+                inputMonto.classList.remove('text-gray-400');
                 inputMonto.focus();
             } else {
                 inputMonto.readOnly = true;
@@ -484,6 +497,31 @@
             }
         };
 
+        window.finalizarMes = function() {
+            window.abrirConfirmacion("¿Confirmas el Cierre del Periodo? El balance volverá a $0.", async () => {
+                window.localState.inicioPeriodo = Date.now();
+                
+                if (isFirebaseActive && db) {
+                    try {
+                        await db.collection("barberias").doc("bmbarber_global").collection("config").doc("general").set({
+                            inicioPeriodo: window.localState.inicioPeriodo
+                        });
+                        window.mostrarNotificacion("Nuevo periodo iniciado");
+                    } catch(e) {
+                        window.guardarLocal();
+                        window.mostrarNotificacion("Guardado Local");
+                    }
+                } else {
+                    window.guardarLocal();
+                    window.mostrarNotificacion("Guardado Local");
+                }
+                
+                window.actualizarUI();
+                // Navegamos hacia arriba para ver que los números se resetearon
+                document.getElementById('view-balance').scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+
         const formatMoney = (amount) => {
             return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
         };
@@ -515,11 +553,19 @@
                 // Armado del Historial
                 const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'mes';
                 const now = new Date();
+                const inicioPeriodo = window.localState.inicioPeriodo;
                 
                 let cortesFiltrados = window.localState.cortes.filter(corte => {
                     const fechaCorte = new Date(corte.timestamp);
                     if (filtro === 'hoy') return fechaCorte.toDateString() === now.toDateString();
-                    if (filtro === 'mes') return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
+                    if (filtro === 'mes') {
+                        if (inicioPeriodo) {
+                            return corte.timestamp >= inicioPeriodo;
+                        } else {
+                            // Si nunca presionó Finalizar Mes, se guía por el calendario normal
+                            return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
+                        }
+                    }
                     return true; 
                 });
 
@@ -564,6 +610,7 @@
                 if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
 
                 const cortesMes = window.localState.cortes.filter(corte => {
+                    if (inicioPeriodo) return corte.timestamp >= inicioPeriodo;
                     const fechaCorte = new Date(corte.timestamp);
                     return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
                 });
