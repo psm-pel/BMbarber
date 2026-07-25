@@ -190,13 +190,13 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube - Ahora visible en móvil -->
+    <!-- Marca de Agua y Nube - Ahora visible en móvil y reposicionada -->
     <a href="https://wa.me/543454956044" target="_blank" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:left-4 md:right-auto z-50 flex items-center gap-2 md:gap-3 opacity-60 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
         <img src="./psm.png" alt="Logo PSM" onerror="this.src='https://placehold.co/128x128/ffffff/000000?text=PSM'" class="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white object-cover">
         <span class="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1 bg-black/50 backdrop-blur-sm">by: PSM</span>
     </a>
 
-    <!-- Indicador Nube -->
+    <!-- Indicador Nube - Bajado para no tapar títulos -->
     <div id="cloud-status" class="fixed bottom-20 right-2 md:bottom-4 md:right-4 z-50 flex items-center gap-2 px-2 py-1 md:px-3 border border-white bg-black opacity-90 cursor-default shadow-lg">
         <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-white text-sm md:text-lg transition-colors duration-300"></i>
         <span id="cloud-text" class="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-white transition-colors duration-300">Cargando</span>
@@ -282,7 +282,7 @@
                     <input type="number" id="gasto-internet" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm">
                     <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Monotributo (ARS)</label>
                     <input type="number" id="gasto-monotributo" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Otros Gastos (ARS)</label>
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 text-yellow-300">Otros Gastos (ARS)</label>
                     <input type="number" id="gasto-otros" class="w-full p-2 md:p-3 mb-5 outline-none text-xs md:text-sm">
                     <button onclick="window.guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
@@ -293,7 +293,7 @@
         <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
             <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Balance del Mes Actual</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="glass-panel p-6 text-center">
+                <div class="glass-panel p-6 text-center relative">
                     <div class="flex justify-center items-center gap-2 mb-2">
                         <p class="text-xs uppercase tracking-widest">Ingresos</p>
                         <span id="bal-cantidad-cortes" class="text-[9px] bg-white text-black px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">0 Cortes</span>
@@ -305,9 +305,10 @@
                         <span title="Precio Amigo" class="text-blue-400">Amigo: <b id="bal-ingresos-amigo" class="text-white">$0</b></span>
                     </div>
                 </div>
-                <div class="glass-panel p-6 text-center text-white transition-colors" id="bal-caja-estado">
+                <div class="glass-panel p-6 text-center text-white transition-colors flex flex-col justify-center" id="bal-caja-estado">
                     <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold" id="bal-label-estado">Estado (Ganancia Libre)</p>
-                    <p id="bal-estado" class="text-2xl md:text-3xl font-bold">$0</p>
+                    <p id="bal-estado" class="text-2xl md:text-3xl font-bold mb-1">$0</p>
+                    <p id="bal-gasto-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-70">(Gasto Total: $0)</p>
                 </div>
             </div>
             <div class="glass-panel p-5 md:p-8">
@@ -500,6 +501,7 @@
 
         window.actualizarUI = function() {
             try {
+                // Sincronizar Inputs de Ajustes
                 if(document.getElementById('precio-pelo')) document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || 0;
                 if(document.getElementById('precio-barba')) document.getElementById('precio-barba').value = window.localState.precios.corte_barba || 0;
                 if(document.getElementById('gasto-alquiler')) document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || 0;
@@ -510,6 +512,7 @@
 
                 window.updateCajaPrice();
 
+                // Armado del Historial
                 const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'mes';
                 const now = new Date();
                 
@@ -586,18 +589,11 @@
                 const balEstado = document.getElementById('bal-estado');
                 const balLabel = document.getElementById('bal-label-estado');
                 const cajaEstado = document.getElementById('bal-caja-estado');
-                // Buscamos o creamos un contenedor para el gasto total bajo el estado
-                let balGastoTotal = document.getElementById('bal-gasto-total');
-                if (!balGastoTotal) {
-                    balGastoTotal = document.createElement('p');
-                    balGastoTotal.id = 'bal-gasto-total';
-                    balGastoTotal.className = 'text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-70';
-                    balEstado.parentNode.insertBefore(balGastoTotal, balEstado.nextSibling);
-                }
+                const balGastoTotal = document.getElementById('bal-gasto-total');
                 
                 if(balEstado) {
                     balEstado.textContent = formatMoney(estado);
-                    balGastoTotal.textContent = `(Gasto Total: ${formatMoney(gastosTotales)})`;
+                    if(balGastoTotal) balGastoTotal.textContent = `(Gasto Total: ${formatMoney(gastosTotales)})`;
                     
                     if(estado < 0) {
                         cajaEstado.classList.remove('bg-white', 'text-black');
