@@ -1,4 +1,3 @@
-HTML
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -10,11 +9,25 @@ HTML
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <!-- Modificación para evitar el error de import en la vista previa -->
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #000000; color: #ffffff; }
+        .glass-panel { background: #000000; border: 1px solid #ffffff; }
+        .btn-active { background: #ffffff !important; color: #000000 !important; }
+        input, select { background: #000000 !important; border: 1px solid #ffffff !important; color: #ffffff !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #000000; }
+        ::-webkit-scrollbar-thumb { background: #ffffff; }
+        
+        /* Animaciones para Notificaciones y Modales */
+        .toast-visible { transform: translate(-50%, 0) !important; opacity: 1 !important; }
+        .modal-visible { opacity: 1 !important; pointer-events: auto !important; }
+    </style>
+    
     <script>
         // === CONFIGURACIÓN DE FIREBASE ===
         const firebaseConfig = {
@@ -30,134 +43,161 @@ HTML
         let app, db, auth;
         let isFirebaseActive = false;
         
-        let localState = {
+        // Estado Local por defecto
+        window.localState = {
             cortes: [],
             precios: { "corte_pelo": 5000, "corte_barba": 7000 },
             gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0 }
         };
 
-        try {
-            if(Object.keys(firebaseConfig).length > 0) {
-                app = firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-                auth = firebase.auth();
-                isFirebaseActive = true;
-                
-                // Intento de inicio de sesión
-                auth.signInAnonymously().then(() => {
-                    cargarDatosInicialesFirebase();
-                }).catch(error => {
-                    console.error("Error Auth:", error);
-                    alert("⚠️ Error de Firebase: No se pudo conectar. Asegúrate de habilitar el inicio de sesión 'Anónimo' en tu consola de Firebase.");
+        window.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+
+        async function initApp() {
+            try {
+                if (typeof window.firebase !== 'undefined' && Object.keys(firebaseConfig).length > 0) {
+                    app = window.firebase.initializeApp(firebaseConfig);
+                    db = window.firebase.firestore();
+                    auth = window.firebase.auth();
+                    isFirebaseActive = true;
+                    
+                    auth.signInAnonymously().then(() => {
+                        window.actualizarEstadoNube(true);
+                        cargarDatosInicialesFirebase();
+                    }).catch(error => {
+                        console.error("Error Auth Firebase:", error);
+                        window.mostrarNotificacion("Modo Local (Error de Autenticación)");
+                        window.actualizarEstadoNube(false);
+                        cargarDatosInicialesLocal();
+                    });
+                } else {
+                    window.actualizarEstadoNube(false);
                     cargarDatosInicialesLocal();
-                });
-            } else {
+                }
+            } catch (e) {
+                console.error("Error inicializando App:", e);
+                isFirebaseActive = false;
+                window.actualizarEstadoNube(false);
                 cargarDatosInicialesLocal();
             }
-        } catch (e) {
-            cargarDatosInicialesLocal();
         }
 
-        // --- Lógica de Carga de Datos Corregida ---
         async function cargarDatosInicialesFirebase() {
             if(!db || !auth.currentUser) return;
             const uid = auth.currentUser.uid;
             
             try {
-                // Esperar a que bajen los precios antes de actualizar la UI
                 const docPrecios = await db.collection("usuarios").doc(uid).collection("config").doc("precios").get();
                 if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
                 
-                // Esperar a que bajen los gastos
                 const docGastos = await db.collection("usuarios").doc(uid).collection("config").doc("gastos").get();
                 if(docGastos.exists) { window.localState.gastos = docGastos.data(); }
             } catch(e) {
-                console.error("Error al leer datos, verifica las reglas de Firestore:", e);
-                alert("⚠️ Error: Firebase denegó el permiso para leer datos. Revisa las 'Reglas' de Firestore.");
+                console.error("Error leyendo Firestore:", e);
             }
 
-            // Escuchar Cortes en tiempo real
-            db.collection("usuarios").doc(uid).collection("cortes")
-              .orderBy("timestamp", "desc")
-              .onSnapshot((snapshot) => {
-                  window.localState.cortes = [];
-                  snapshot.forEach((doc) => {
-                      window.localState.cortes.push({ id: doc.id, ...doc.data() });
-                  });
-                  window.actualizarUI();
-              });
+            try {
+                db.collection("usuarios").doc(uid).collection("cortes")
+                .orderBy("timestamp", "desc")
+                .onSnapshot((snapshot) => {
+                    window.localState.cortes = [];
+                    snapshot.forEach((doc) => {
+                        window.localState.cortes.push({ id: doc.id, ...doc.data() });
+                    });
+                    window.actualizarUI();
+                });
+            } catch(e) {
+                console.error("Error al suscribirse a cortes:", e);
+            }
             
-            window.actualizarUI(); // Actualizar todo una vez que bajaron los datos
+            window.actualizarUI();
         }
 
         function cargarDatosInicialesLocal() {
-            const guardado = localStorage.getItem('bmbarber_data');
-            if(guardado) { window.localState = JSON.parse(guardado); }
+            try {
+                const guardado = localStorage.getItem('bmbarber_data');
+                if(guardado) { 
+                    window.localState = JSON.parse(guardado); 
+                }
+            } catch(e) {
+                console.error("Error al leer localStorage:", e);
+            }
             window.actualizarUI();
         }
 
         window.guardarLocal = function() {
-            if(!isFirebaseActive) {
+            try {
                 localStorage.setItem('bmbarber_data', JSON.stringify(window.localState));
+            } catch(e) {
+                console.error("Error al guardar local:", e);
             }
         }
     </script>
-
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #000000; color: #ffffff; }
-        .glass-panel { background: #000000; border: 1px solid #ffffff; }
-        .btn-active { background: #ffffff !important; color: #000000 !important; }
-        input, select { background: #000000 !important; border: 1px solid #ffffff !important; color: #ffffff !important; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #000000; }
-        ::-webkit-scrollbar-thumb { background: #ffffff; }
-    </style>
 </head>
-<body class="h-screen flex overflow-hidden">
+<body class="h-screen flex overflow-hidden relative">
 
-    <!-- Pantalla de Login -->
+    <!-- Notificación Toast -->
+    <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-white text-black px-6 py-3 text-xs font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] pointer-events-none">
+        Mensaje
+    </div>
+
+    <!-- Modal Confirmación -->
+    <div id="confirm-modal" class="fixed inset-0 z-[100] bg-black bg-opacity-90 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel p-8 max-w-sm w-full mx-4 text-center">
+            <h3 class="text-sm font-light uppercase tracking-widest mb-8" id="confirm-message">¿Estás seguro?</h3>
+            <div class="flex gap-4">
+                <button onclick="window.cerrarConfirmacion(false)" class="flex-1 border border-white py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-800 transition-colors">Cancelar</button>
+                <button onclick="window.cerrarConfirmacion(true)" class="flex-1 bg-white text-black py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-300 transition-colors">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login -->
     <div id="login-screen" class="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center">
         <div class="glass-panel p-12 flex flex-col items-center gap-8 w-full max-w-sm mx-4">
             <img src="https://placehold.co/128x128/ffffff/000000?text=Logo" alt="Logo BMbarber" class="w-32 h-32 border-2 border-white object-cover">
             <h1 class="text-3xl font-light uppercase tracking-[0.2em]">BMbarber</h1>
             <div class="w-full">
-                <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') attemptLogin()" class="w-full p-4 text-center tracking-[0.2em] text-sm uppercase placeholder:tracking-normal placeholder:text-gray-600 transition-colors focus:border-gray-400">
+                <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-4 text-center tracking-[0.2em] text-sm uppercase placeholder:tracking-normal placeholder:text-gray-600 transition-colors focus:border-gray-400">
                 <p id="login-error" class="text-white text-xs mt-3 text-center opacity-0 transition-opacity">Contraseña incorrecta</p>
             </div>
-            <button onclick="attemptLogin()" class="w-full border border-white hover:bg-white hover:text-black transition-all py-4 uppercase font-bold text-xs tracking-[0.2em]">Ingresar</button>
+            <button onclick="window.attemptLogin()" class="w-full border border-white hover:bg-white hover:text-black transition-all py-4 uppercase font-bold text-xs tracking-[0.2em]">Ingresar</button>
         </div>
     </div>
 
-    <!-- Sidebar -->
     <nav class="border-r border-white w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-black">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-white">
             <img src="https://placehold.co/96x96/ffffff/000000?text=Logo" alt="Logo BMbarber" class="w-24 h-24 border-2 border-white object-cover">
             <h1 class="text-lg font-light uppercase tracking-[0.2em]">BMbarber</h1>
         </div>
         <div class="flex md:flex-col w-full md:mt-6 p-2 gap-2">
-            <button onclick="navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
+            <button onclick="window.navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
                 <i class="ph ph-scissors text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Caja</span>
             </button>
-            <button onclick="navigate('historial')" id="nav-historial" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
+            <button onclick="window.navigate('historial')" id="nav-historial" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
                 <i class="ph ph-clock text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Historial</span>
             </button>
-            <button onclick="navigate('gastos')" id="nav-gastos" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
+            <button onclick="window.navigate('gastos')" id="nav-gastos" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
                 <i class="ph ph-gear text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Ajustes</span>
             </button>
-            <button onclick="navigate('balance')" id="nav-balance" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
+            <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
                 <i class="ph ph-chart-line text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Balance</span>
             </button>
         </div>
     </nav>
 
-    <!-- Marca de Agua Fija -->
-    <a href="https://wa.me/5491100000000" target="_blank" class="fixed bottom-20 md:bottom-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
-        <img src="https://placehold.co/32x32/ffffff/000000?text=Logo" alt="Logo de Marca" class="w-8 h-8 rounded-full border border-white object-cover">
-        <span class="text-xs font-bold uppercase tracking-widest text-white">by: PSM</span>
+    <!-- Marca de Agua y Nube -->
+    <a href="https://wa.me/5491100000000" target="_blank" class="fixed bottom-20 md:bottom-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105 hidden md:flex">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1">by: PSM</span>
     </a>
 
-    <!-- Vistas Principales -->
+    <!-- Indicador Nube -->
+    <div id="cloud-status" class="fixed bottom-20 md:bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-1 border border-white bg-black opacity-80 cursor-default" title="Conectando...">
+        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-white text-lg transition-colors duration-300"></i>
+        <span id="cloud-text" class="text-[10px] font-bold uppercase tracking-widest text-white transition-colors duration-300">Cargando</span>
+    </div>
+
     <main class="flex-1 h-full overflow-y-auto p-4 md:p-12 pb-24 md:pb-8">
         
         <!-- VISTA CAJA -->
@@ -165,18 +205,21 @@ HTML
             <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Nueva Operación</h2>
             <div class="glass-panel p-8">
                 <label class="block text-xs uppercase tracking-widest mb-2">Servicio Realizado</label>
-                <select id="caja-servicio" onchange="updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
+                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
                     <option value="corte_pelo">Corte de Pelo</option>
                     <option value="corte_barba">Corte de Pelo + Barba</option>
                 </select>
                 
+                <label class="block text-xs uppercase tracking-widest mb-2">Método de Pago</label>
+                <select id="caja-metodo" class="w-full p-4 mb-6 outline-none text-sm">
+                    <option value="efectivo">Efectivo (En negro)</option>
+                    <option value="tarjeta">Tarjeta / Transferencia (Blanco)</option>
+                </select>
+
                 <label class="block text-xs uppercase tracking-widest mb-2">Monto a Cobrar (ARS)</label>
                 <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-light" readonly>
                 
-                <button onclick="registrarOperacion()" class="w-full bg-white text-black font-bold py-4 uppercase tracking-[0.2em] hover:bg-gray-300 transition-all">Registrar Corte</button>
-            </div>
-            <div id="toast-exito" class="mt-4 p-4 border border-white text-center text-sm font-bold tracking-widest uppercase opacity-0 transition-opacity duration-300 pointer-events-none">
-                ¡Operación Registrada!
+                <button onclick="window.registrarOperacion()" class="w-full bg-white text-black font-bold py-4 uppercase tracking-[0.2em] hover:bg-gray-300 transition-all">Registrar Corte</button>
             </div>
         </div>
 
@@ -194,8 +237,9 @@ HTML
                 <table class="w-full text-left">
                     <thead>
                         <tr class="border-b border-white uppercase text-xs tracking-widest">
-                            <th class="p-4 font-normal">Fecha y Hora</th>
+                            <th class="p-4 font-normal">Fecha</th>
                             <th class="p-4 font-normal">Servicio</th>
+                            <th class="p-4 font-normal text-center">Método</th>
                             <th class="p-4 font-normal text-right">Monto</th>
                             <th class="p-4 font-normal text-center">Acción</th>
                         </tr>
@@ -215,16 +259,14 @@ HTML
         <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto">
             <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Ajustes y Gastos</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Precios -->
                 <div class="glass-panel p-6">
                     <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-white pb-2">Precios de Servicios</h3>
                     <label class="block text-xs uppercase tracking-widest mb-2 mt-4">Corte de Pelo (ARS)</label>
                     <input type="number" id="precio-pelo" class="w-full p-3 mb-4 outline-none">
                     <label class="block text-xs uppercase tracking-widest mb-2">Corte + Barba (ARS)</label>
                     <input type="number" id="precio-barba" class="w-full p-3 mb-6 outline-none">
-                    <button onclick="guardarPrecios()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Precios</button>
+                    <button onclick="window.guardarPrecios()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Precios</button>
                 </div>
-                <!-- Gastos Fijos -->
                 <div class="glass-panel p-6">
                     <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-white pb-2">Gastos Fijos Mensuales</h3>
                     <label class="block text-xs uppercase tracking-widest mb-2">Alquiler (ARS)</label>
@@ -235,7 +277,7 @@ HTML
                     <input type="number" id="gasto-internet" class="w-full p-3 mb-4 outline-none">
                     <label class="block text-xs uppercase tracking-widest mb-2">Monotributo (ARS)</label>
                     <input type="number" id="gasto-monotributo" class="w-full p-3 mb-6 outline-none">
-                    <button onclick="guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
+                    <button onclick="window.guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
             </div>
         </div>
@@ -246,14 +288,18 @@ HTML
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="glass-panel p-6 text-center">
                     <p class="text-xs uppercase tracking-widest mb-2">Ingresos del Mes</p>
-                    <p id="bal-ingresos" class="text-3xl font-light">$0</p>
+                    <p id="bal-ingresos" class="text-3xl font-light mb-2">$0</p>
+                    <div class="flex justify-between text-[10px] text-gray-400 border-t border-gray-800 pt-2 uppercase tracking-widest mt-2">
+                        <span title="Ingresos en Negro">Efec: <b id="bal-ingresos-efectivo" class="text-white">$0</b></span>
+                        <span title="Ingresos en Blanco">Tarj/Transf: <b id="bal-ingresos-tarjeta" class="text-white">$0</b></span>
+                    </div>
                 </div>
                 <div class="glass-panel p-6 text-center">
                     <p class="text-xs uppercase tracking-widest mb-2">Gastos Fijos</p>
                     <p id="bal-gastos" class="text-3xl font-light">$0</p>
                 </div>
-                <div class="glass-panel p-6 text-center bg-white text-black">
-                    <p class="text-xs uppercase tracking-widest mb-2 font-bold">Estado (Ganancia / Falta)</p>
+                <div class="glass-panel p-6 text-center bg-white text-black transition-colors" id="bal-caja-estado">
+                    <p class="text-xs uppercase tracking-widest mb-2 font-bold text-black" id="bal-label-estado">Estado (Ganancia Libre)</p>
                     <p id="bal-estado" class="text-3xl font-bold">$0</p>
                 </div>
             </div>
@@ -268,8 +314,52 @@ HTML
         </div>
     </main>
 
-    <!-- Lógica de Funciones -->
     <script>
+        // --- SISTEMA DE NOTIFICACIONES ---
+        let toastTimeout;
+        window.mostrarNotificacion = function(mensaje) {
+            const toast = document.getElementById('global-toast');
+            toast.textContent = mensaje;
+            toast.classList.add('toast-visible');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('toast-visible');
+            }, 3000);
+        };
+
+        // --- SISTEMA DE CONFIRMACIÓN ---
+        let callbackConfirmacion = null;
+        window.abrirConfirmacion = function(mensaje, callback) {
+            document.getElementById('confirm-message').textContent = mensaje;
+            document.getElementById('confirm-modal').classList.add('modal-visible');
+            callbackConfirmacion = callback;
+        };
+
+        window.cerrarConfirmacion = function(respuesta) {
+            document.getElementById('confirm-modal').classList.remove('modal-visible');
+            if (respuesta && callbackConfirmacion) {
+                callbackConfirmacion();
+            }
+            callbackConfirmacion = null;
+        };
+
+        // --- ESTADO DE NUBE ---
+        window.actualizarEstadoNube = function(conectado) {
+            const icon = document.getElementById('cloud-icon');
+            const text = document.getElementById('cloud-text');
+            if(conectado) {
+                icon.className = "ph ph-cloud-check text-green-500 text-lg transition-colors duration-300";
+                text.className = "text-[10px] font-bold uppercase tracking-widest text-green-500 transition-colors duration-300";
+                text.textContent = "Online";
+                document.getElementById('cloud-status').title = "Conectado a Firebase";
+            } else {
+                icon.className = "ph ph-cloud-slash text-red-500 text-lg transition-colors duration-300";
+                text.className = "text-[10px] font-bold uppercase tracking-widest text-red-500 transition-colors duration-300";
+                text.textContent = "Local";
+                document.getElementById('cloud-status').title = "Modo sin conexión (Guardando localmente)";
+            }
+        };
+
         window.attemptLogin = function() {
             const passInput = document.getElementById('login-password');
             const errorMsg = document.getElementById('login-error');
@@ -301,48 +391,59 @@ HTML
 
         window.registrarOperacion = async function() {
             const tipo = document.getElementById('caja-servicio').value;
+            const metodo = document.getElementById('caja-metodo').value;
             const monto = parseFloat(document.getElementById('caja-monto').value);
-            if (isNaN(monto) || monto <= 0) return;
+            
+            if (isNaN(monto) || monto <= 0) {
+                window.mostrarNotificacion("Revisa el monto");
+                return;
+            }
 
-            const nuevaOperacion = { tipo: tipo, monto: monto, timestamp: Date.now() };
+            const nuevaOperacion = { tipo: tipo, metodoPago: metodo, monto: monto, timestamp: Date.now() };
 
             if (isFirebaseActive && auth && auth.currentUser) {
                 const uid = auth.currentUser.uid;
                 try {
                     await db.collection("usuarios").doc(uid).collection("cortes").add(nuevaOperacion);
+                    window.mostrarNotificacion("Corte Registrado (Nube)");
                 } catch (e) {
-                    alert("Error al guardar en la nube. Revisa las reglas de Firestore.");
+                    guardarLocalFallback(nuevaOperacion);
+                    window.mostrarNotificacion("Error red. Guardado Local.");
                 }
             } else {
-                nuevaOperacion.id = 'local_' + Date.now();
-                window.localState.cortes.unshift(nuevaOperacion);
-                window.guardarLocal();
-                window.actualizarUI();
+                guardarLocalFallback(nuevaOperacion);
+                window.mostrarNotificacion("Corte Registrado (Local)");
             }
-
-            const toast = document.getElementById('toast-exito');
-            toast.classList.remove('opacity-0');
-            setTimeout(() => toast.classList.add('opacity-0'), 2000);
         };
+
+        function guardarLocalFallback(operacion) {
+            operacion.id = 'local_' + Date.now();
+            window.localState.cortes.unshift(operacion);
+            window.guardarLocal();
+            window.actualizarUI();
+        }
 
         window.guardarPrecios = async function() {
             const pelo = parseFloat(document.getElementById('precio-pelo').value) || 0;
             const barba = parseFloat(document.getElementById('precio-barba').value) || 0;
             window.localState.precios = { "corte_pelo": pelo, "corte_barba": barba };
             
+            // Forzar actualización inmediata visual (Resuelve el problema anterior)
+            window.actualizarUI();
+            
             if (isFirebaseActive && auth && auth.currentUser) {
                 const uid = auth.currentUser.uid;
                 try {
                     await db.collection("usuarios").doc(uid).collection("config").doc("precios").set(window.localState.precios);
-                    alert("✅ Precios guardados exitosamente en la nube.");
+                    window.mostrarNotificacion("Precios Actualizados (Nube)");
                 } catch (e) {
-                    alert("❌ Error al guardar precios. Revisa tus permisos en Firebase.");
+                    window.guardarLocal();
+                    window.mostrarNotificacion("Precios Actualizados (Local)");
                 }
             } else {
                 window.guardarLocal();
-                alert("✅ Precios guardados (Modo Local).");
+                window.mostrarNotificacion("Precios Actualizados (Local)");
             }
-            window.actualizarUI();
         };
 
         window.guardarGastos = async function() {
@@ -354,19 +455,22 @@ HTML
             };
             window.localState.gastos = gastos;
             
+            // Forzar actualización inmediata visual
+            window.actualizarUI();
+            
             if (isFirebaseActive && auth && auth.currentUser) {
                 const uid = auth.currentUser.uid;
                 try {
                     await db.collection("usuarios").doc(uid).collection("config").doc("gastos").set(window.localState.gastos);
-                    alert("✅ Gastos guardados exitosamente en la nube.");
+                    window.mostrarNotificacion("Gastos Actualizados (Nube)");
                 } catch (e) {
-                    alert("❌ Error al guardar gastos. Revisa tus permisos en Firebase.");
+                    window.guardarLocal();
+                    window.mostrarNotificacion("Gastos Actualizados (Local)");
                 }
             } else {
                 window.guardarLocal();
-                alert("✅ Gastos guardados (Modo Local).");
+                window.mostrarNotificacion("Gastos Actualizados (Local)");
             }
-            window.actualizarUI();
         };
 
         const formatMoney = (amount) => {
@@ -385,96 +489,139 @@ HTML
         };
 
         window.actualizarUI = function() {
-            document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || '';
-            document.getElementById('precio-barba').value = window.localState.precios.corte_barba || '';
-            document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || '';
-            document.getElementById('gasto-luz').value = window.localState.gastos.luz || '';
-            document.getElementById('gasto-internet').value = window.localState.gastos.internet || '';
-            document.getElementById('gasto-monotributo').value = window.localState.gastos.monotributo || '';
+            try {
+                // Actualizar Inputs de Ajustes
+                if(document.getElementById('precio-pelo')) document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || 0;
+                if(document.getElementById('precio-barba')) document.getElementById('precio-barba').value = window.localState.precios.corte_barba || 0;
+                if(document.getElementById('gasto-alquiler')) document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || 0;
+                if(document.getElementById('gasto-luz')) document.getElementById('gasto-luz').value = window.localState.gastos.luz || 0;
+                if(document.getElementById('gasto-internet')) document.getElementById('gasto-internet').value = window.localState.gastos.internet || 0;
+                if(document.getElementById('gasto-monotributo')) document.getElementById('gasto-monotributo').value = window.localState.gastos.monotributo || 0;
 
-            const filtro = document.getElementById('filtro-historial').value;
-            const now = new Date();
-            
-            let cortesFiltrados = window.localState.cortes.filter(corte => {
-                const fechaCorte = new Date(corte.timestamp);
-                if (filtro === 'hoy') return fechaCorte.toDateString() === now.toDateString();
-                if (filtro === 'mes') return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
-                return true; 
-            });
+                // Actualizar precio en Caja
+                window.updateCajaPrice();
 
-            cortesFiltrados.sort((a,b) => b.timestamp - a.timestamp);
-            const tbody = document.getElementById('historial-body');
-            tbody.innerHTML = '';
-            let totalVista = 0;
+                // Actualizar Historial
+                const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'mes';
+                const now = new Date();
+                
+                let cortesFiltrados = window.localState.cortes.filter(corte => {
+                    const fechaCorte = new Date(corte.timestamp);
+                    if (filtro === 'hoy') return fechaCorte.toDateString() === now.toDateString();
+                    if (filtro === 'mes') return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
+                    return true; 
+                });
 
-            cortesFiltrados.forEach(corte => {
-                totalVista += corte.monto;
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-800 hover:bg-gray-900 transition-colors';
-                tr.innerHTML = `
-                    <td class="p-4">${formatearFecha(corte.timestamp)}</td>
-                    <td class="p-4">${getNombreServicio(corte.tipo)}</td>
-                    <td class="p-4 text-right font-medium">${formatMoney(corte.monto)}</td>
-                    <td class="p-4 text-center">
-                        <button onclick="borrarRegistro('${corte.id}')" class="text-gray-500 hover:text-white transition-colors" title="Eliminar">
-                            <i class="ph ph-trash text-lg"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+                cortesFiltrados.sort((a,b) => b.timestamp - a.timestamp);
+                const tbody = document.getElementById('historial-body');
+                if(tbody) tbody.innerHTML = '';
+                let totalVista = 0;
 
-            document.getElementById('historial-total').textContent = formatMoney(totalVista);
+                cortesFiltrados.forEach(corte => {
+                    totalVista += corte.monto;
+                    
+                    // Determinar ícono de método (Efectivo/Tarjeta)
+                    const metodoIcon = corte.metodoPago === 'tarjeta' ? '<i class="ph ph-credit-card text-lg" title="Tarjeta/Transferencia"></i>' : '<i class="ph ph-money text-lg" title="Efectivo"></i>';
+                    const metodoClass = corte.metodoPago === 'tarjeta' ? 'text-gray-400' : 'text-white';
 
-            const cortesMes = window.localState.cortes.filter(corte => {
-                const fechaCorte = new Date(corte.timestamp);
-                return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
-            });
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-800 hover:bg-gray-900 transition-colors';
+                    tr.innerHTML = `
+                        <td class="p-4 text-xs">${formatearFecha(corte.timestamp)}</td>
+                        <td class="p-4">${getNombreServicio(corte.tipo)}</td>
+                        <td class="p-4 text-center ${metodoClass}">${metodoIcon}</td>
+                        <td class="p-4 text-right font-bold">${formatMoney(corte.monto)}</td>
+                        <td class="p-4 text-center">
+                            <button onclick="window.borrarRegistro('${corte.id}')" class="text-gray-500 hover:text-white transition-colors" title="Eliminar">
+                                <i class="ph ph-trash text-lg"></i>
+                            </button>
+                        </td>
+                    `;
+                    if(tbody) tbody.appendChild(tr);
+                });
 
-            const ingresosTotales = cortesMes.reduce((acc, curr) => acc + curr.monto, 0);
-            const gastosTotales = Object.values(window.localState.gastos).reduce((acc, curr) => acc + Number(curr), 0);
-            const estado = ingresosTotales - gastosTotales;
+                if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
 
-            document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
-            document.getElementById('bal-gastos').textContent = formatMoney(gastosTotales);
-            document.getElementById('bal-estado').textContent = formatMoney(estado);
+                // Actualizar Balance (Con Desglose Efectivo/Tarjeta)
+                const cortesMes = window.localState.cortes.filter(corte => {
+                    const fechaCorte = new Date(corte.timestamp);
+                    return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
+                });
 
-            let porcentaje = 0;
-            if (gastosTotales > 0) porcentaje = (ingresosTotales / gastosTotales) * 100;
-            else if (ingresosTotales > 0) porcentaje = 100;
-            
-            porcentaje = Math.min(Math.round(porcentaje), 100);
-            document.getElementById('bal-barra').style.width = `${porcentaje}%`;
-            document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
+                const ingresosTotales = cortesMes.reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosEfectivo = cortesMes.filter(c => c.metodoPago !== 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosTarjeta = cortesMes.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
+                
+                const gastosTotales = Object.values(window.localState.gastos).reduce((acc, curr) => acc + Number(curr), 0);
+                const estado = ingresosTotales - gastosTotales;
 
-            const mensajeEl = document.getElementById('bal-mensaje');
-            if (estado >= 0) {
-                mensajeEl.textContent = "¡Gastos cubiertos! Estás generando ganancias.";
-            } else {
-                mensajeEl.textContent = `Faltan ${formatMoney(Math.abs(estado))} para cubrir los gastos fijos.`;
+                if(document.getElementById('bal-ingresos')) document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
+                if(document.getElementById('bal-ingresos-efectivo')) document.getElementById('bal-ingresos-efectivo').textContent = formatMoney(ingresosEfectivo);
+                if(document.getElementById('bal-ingresos-tarjeta')) document.getElementById('bal-ingresos-tarjeta').textContent = formatMoney(ingresosTarjeta);
+                if(document.getElementById('bal-gastos')) document.getElementById('bal-gastos').textContent = formatMoney(gastosTotales);
+                
+                const balEstado = document.getElementById('bal-estado');
+                const balLabel = document.getElementById('bal-label-estado');
+                const cajaEstado = document.getElementById('bal-caja-estado');
+                
+                if(balEstado) {
+                    balEstado.textContent = formatMoney(estado);
+                    if(estado < 0) {
+                        cajaEstado.classList.remove('bg-white', 'text-black');
+                        cajaEstado.classList.add('bg-black', 'text-white', 'border', 'border-white');
+                        balLabel.classList.remove('text-black');
+                        balLabel.classList.add('text-white');
+                        balLabel.textContent = "Estado (Falta para cubrir)";
+                    } else {
+                        cajaEstado.classList.remove('bg-black', 'text-white', 'border', 'border-white');
+                        cajaEstado.classList.add('bg-white', 'text-black');
+                        balLabel.classList.remove('text-white');
+                        balLabel.classList.add('text-black');
+                        balLabel.textContent = "Estado (Ganancia Libre)";
+                    }
+                }
+
+                let porcentaje = 0;
+                if (gastosTotales > 0) porcentaje = (ingresosTotales / gastosTotales) * 100;
+                else if (ingresosTotales > 0) porcentaje = 100;
+                
+                porcentaje = Math.min(Math.round(porcentaje), 100);
+                if(document.getElementById('bal-barra')) document.getElementById('bal-barra').style.width = `${porcentaje}%`;
+                if(document.getElementById('bal-porcentaje')) document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
+
+                const mensajeEl = document.getElementById('bal-mensaje');
+                if(mensajeEl) {
+                    if (estado >= 0) {
+                        mensajeEl.textContent = "¡Gastos fijos cubiertos! Ya estás generando ganancias.";
+                    } else {
+                        mensajeEl.textContent = `Faltan ${formatMoney(Math.abs(estado))} para cubrir los gastos del mes.`;
+                    }
+                }
+            } catch(e) {
+                console.error("Error al actualizar la Interfaz:", e);
             }
-
-            window.updateCajaPrice();
         };
 
         window.borrarRegistro = async function(id) {
-            if(confirm("¿Seguro que deseas eliminar este registro?")) {
+            window.abrirConfirmacion("¿Seguro que deseas eliminar este registro?", async () => {
                 if (isFirebaseActive && auth && auth.currentUser) {
                     const uid = auth.currentUser.uid;
                     try {
                         await db.collection("usuarios").doc(uid).collection("cortes").doc(id).delete();
+                        window.mostrarNotificacion("Corte Eliminado (Nube)");
                     } catch (e) {
-                        alert("Error al borrar el registro en la nube.");
+                        console.error(e);
+                        window.mostrarNotificacion("Error al borrar en la nube.");
                     }
                 } else {
                     window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
                     window.guardarLocal();
                     window.actualizarUI();
+                    window.mostrarNotificacion("Corte Eliminado (Local)");
                 }
-            }
+            });
         };
 
-        window.onload = () => { window.actualizarUI(); };
     </script>
 </body>
 </html>
