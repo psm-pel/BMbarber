@@ -27,8 +27,7 @@
                   measurementId: "G-9WBYCKS2RG"
         };
 
-        // --- STREAMING_CHUNK:Inicializando App y Estado Local (Fallback) ---
-        let app, db, auth;
+        //        let app, db, auth;
         let isFirebaseActive = false;
         
         // Estado local (se usa si Firebase no está configurado)
@@ -67,8 +66,7 @@
             cargarDatosInicialesLocal();
         }
 
-        // --- STREAMING_CHUNK:Lógica de Carga de Datos ---
-        async function cargarDatosInicialesFirebase() {
+        //        async function cargarDatosInicialesFirebase() {
             if(!db || !auth.currentUser) return;
             const uid = auth.currentUser.uid;
             
@@ -141,7 +139,7 @@
 </head>
 <body class="h-screen flex overflow-hidden">
 
-    <!-- --- STREAMING_CHUNK:Estructura HTML - Pantalla de Login --- -->
+    <!-- -->
     <div id="login-screen" class="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center">
         <div class="glass-panel p-12 flex flex-col items-center gap-8 w-full max-w-sm mx-4">
             <!-- AQUI PON EL LINK DE TU LOGO PARA EL LOGIN -->
@@ -158,7 +156,20 @@
         </div>
     </div>
 
-    <!-- --- STREAMING_CHUNK:Estructura HTML - Navegación y Marca de Agua --- -->
+    <!-- -->
+    <div id="modal-confirmacion" class="absolute inset-0 z-[60] bg-black/90 hidden flex flex-col items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="glass-panel p-8 w-full max-w-sm mx-4 text-center flex flex-col items-center">
+            <i class="ph ph-warning-circle text-4xl mb-4 text-white"></i>
+            <h3 class="text-lg font-bold uppercase tracking-widest mb-2">Eliminar Registro</h3>
+            <p class="text-sm text-gray-400 mb-8">¿Estás seguro que deseas eliminar este corte del historial? Esta acción no se puede deshacer.</p>
+            <div class="flex gap-4 w-full">
+                <button onclick="cerrarModal()" class="flex-1 border border-white py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-800 transition-all">Cancelar</button>
+                <button onclick="ejecutarBorrado()" class="flex-1 bg-white text-black py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-300 transition-all">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- -->
     <!-- Sidebar -->
     <nav class="border-r border-white w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-black">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-white">
@@ -191,7 +202,7 @@
         <span class="text-xs font-bold uppercase tracking-widest text-white">by: PSM</span>
     </a>
 
-    <!-- --- STREAMING_CHUNK:Estructura HTML - Vistas Principales --- -->
+    <!-- -->
     <main class="flex-1 h-full overflow-y-auto p-4 md:p-12 pb-24 md:pb-8">
         
         <!-- VISTA CAJA -->
@@ -289,6 +300,10 @@
                     <button onclick="guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
             </div>
+            <!-- Notificación de Ajustes guardados -->
+            <div id="toast-ajustes" class="mt-4 p-4 border border-white text-center text-sm font-bold tracking-widest uppercase opacity-0 transition-opacity duration-300 pointer-events-none">
+                ¡Cambios Guardados!
+            </div>
         </div>
 
         <!-- VISTA BALANCE -->
@@ -324,7 +339,7 @@
         </div>
     </main>
 
-    <!-- --- STREAMING_CHUNK:Lógica Funcional de la Aplicación --- -->
+    <!-- -->
     <script>
         // --- LÓGICA DE LOGIN ---
         window.attemptLogin = function() {
@@ -392,6 +407,12 @@
         };
 
         // --- VISTA AJUSTES ---
+        window.mostrarToastAjustes = function() {
+            const toast = document.getElementById('toast-ajustes');
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 2000);
+        }
+
         window.guardarPrecios = async function() {
             const pelo = parseFloat(document.getElementById('precio-pelo').value) || 0;
             const barba = parseFloat(document.getElementById('precio-barba').value) || 0;
@@ -405,8 +426,7 @@
                 window.guardarLocal();
             }
             window.updateCajaPrice();
-            // Reemplazado alert por consola para evitar bloqueos
-            console.log("Precios actualizados"); 
+            window.mostrarToastAjustes();
         };
 
         window.guardarGastos = async function() {
@@ -426,7 +446,7 @@
                 window.guardarLocal();
             }
             window.actualizarUI();
-            console.log("Gastos fijos actualizados");
+            window.mostrarToastAjustes();
         };
 
         // --- FUNCIONES DE UTILIDAD ---
@@ -443,6 +463,39 @@
             if(id === 'corte_pelo') return 'Corte de Pelo';
             if(id === 'corte_barba') return 'Corte + Barba';
             return id;
+        };
+
+        //        
+        // --- LÓGICA DE BORRADO Y MODAL ---
+        let registroAEliminarId = null;
+
+        window.borrarRegistro = function(id) {
+            registroAEliminarId = id;
+            document.getElementById('modal-confirmacion').classList.remove('hidden');
+        };
+
+        window.cerrarModal = function() {
+            registroAEliminarId = null;
+            document.getElementById('modal-confirmacion').classList.add('hidden');
+        };
+
+        window.ejecutarBorrado = async function() {
+            if(!registroAEliminarId) return;
+            const id = registroAEliminarId;
+            window.cerrarModal(); // Cerrar el modal inmediatamente
+
+            if (isFirebaseActive && auth && auth.currentUser) {
+                const uid = auth.currentUser.uid;
+                try {
+                    await db.collection("usuarios").doc(uid).collection("cortes").doc(id).delete();
+                } catch (e) {
+                    console.error("Error borrando:", e);
+                }
+            } else {
+                window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
+                window.guardarLocal();
+                window.actualizarUI();
+            }
         };
 
         // --- ACTUALIZACIÓN GENERAL DE LA INTERFAZ ---
@@ -534,25 +587,6 @@
 
             // Asegurar que la caja tenga el precio correcto mostrado
             window.updateCajaPrice();
-        };
-
-        window.borrarRegistro = async function(id) {
-            // Cambiado confirm nativo por lógica más segura
-            const confirma = confirm("¿Seguro que deseas eliminar este registro?");
-            if(confirma) {
-                if (isFirebaseActive && auth && auth.currentUser) {
-                    const uid = auth.currentUser.uid;
-                    try {
-                        await db.collection("usuarios").doc(uid).collection("cortes").doc(id).delete();
-                    } catch (e) {
-                        console.error("Error borrando:", e);
-                    }
-                } else {
-                    window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
-                    window.guardarLocal();
-                    window.actualizarUI();
-                }
-            }
         };
 
         // Inicialización final
