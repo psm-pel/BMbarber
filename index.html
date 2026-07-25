@@ -1,3 +1,4 @@
+HTML
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -15,8 +16,7 @@
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
 
     <script>
-        // === CONFIGURACIÓN DE FIREBASE (Para cuando lo subas a GitHub) ===
-        // Aquí debes pegar la configuración de tu proyecto de Firebase
+        // === CONFIGURACIÓN DE FIREBASE ===
         const firebaseConfig = {
                   apiKey: "AIzaSyCVXCexN2dsGg4qU_HILCZF4fLD_rX2MzE",
                   authDomain: "control-bmbarber.firebaseapp.com",
@@ -27,62 +27,56 @@
                   measurementId: "G-9WBYCKS2RG"
         };
 
-        //        let app, db, auth;
+        let app, db, auth;
         let isFirebaseActive = false;
         
-        // Estado local (se usa si Firebase no está configurado)
         let localState = {
             cortes: [],
-            precios: {
-                "corte_pelo": 5000,
-                "corte_barba": 7000
-            },
-            gastos: {
-                alquiler: 0,
-                luz: 0,
-                internet: 0,
-                monotributo: 0
-            }
+            precios: { "corte_pelo": 5000, "corte_barba": 7000 },
+            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0 }
         };
 
         try {
             if(Object.keys(firebaseConfig).length > 0) {
-                // Usando sintaxis compat para evitar el error de módulos
                 app = firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
                 auth = firebase.auth();
                 isFirebaseActive = true;
-                console.log("Firebase inicializado correctamente.");
                 
+                // Intento de inicio de sesión
                 auth.signInAnonymously().then(() => {
                     cargarDatosInicialesFirebase();
-                }).catch(error => console.error("Error Auth:", error));
+                }).catch(error => {
+                    console.error("Error Auth:", error);
+                    alert("⚠️ Error de Firebase: No se pudo conectar. Asegúrate de habilitar el inicio de sesión 'Anónimo' en tu consola de Firebase.");
+                    cargarDatosInicialesLocal();
+                });
             } else {
-                console.log("Usando almacenamiento local de prueba.");
                 cargarDatosInicialesLocal();
             }
         } catch (e) {
-            console.error("Error al inicializar Firebase. Usando local.", e);
             cargarDatosInicialesLocal();
         }
 
-        //        async function cargarDatosInicialesFirebase() {
+        // --- Lógica de Carga de Datos Corregida ---
+        async function cargarDatosInicialesFirebase() {
             if(!db || !auth.currentUser) return;
             const uid = auth.currentUser.uid;
             
-            // Cargar Precios
-            const preciosRef = db.collection("usuarios").doc(uid).collection("config").doc("precios");
-            preciosRef.get().then((doc) => {
-                if(doc.exists) { window.localState.precios = doc.data(); }
-            });
-            
-            // Cargar Gastos
-            const gastosRef = db.collection("usuarios").doc(uid).collection("config").doc("gastos");
-            gastosRef.get().then((doc) => {
-                if(doc.exists) { window.localState.gastos = doc.data(); }
-            });
+            try {
+                // Esperar a que bajen los precios antes de actualizar la UI
+                const docPrecios = await db.collection("usuarios").doc(uid).collection("config").doc("precios").get();
+                if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
+                
+                // Esperar a que bajen los gastos
+                const docGastos = await db.collection("usuarios").doc(uid).collection("config").doc("gastos").get();
+                if(docGastos.exists) { window.localState.gastos = docGastos.data(); }
+            } catch(e) {
+                console.error("Error al leer datos, verifica las reglas de Firestore:", e);
+                alert("⚠️ Error: Firebase denegó el permiso para leer datos. Revisa las 'Reglas' de Firestore.");
+            }
 
-            // Escuchar Cortes
+            // Escuchar Cortes en tiempo real
             db.collection("usuarios").doc(uid).collection("cortes")
               .orderBy("timestamp", "desc")
               .onSnapshot((snapshot) => {
@@ -93,14 +87,12 @@
                   window.actualizarUI();
               });
             
-            window.actualizarUI();
+            window.actualizarUI(); // Actualizar todo una vez que bajaron los datos
         }
 
         function cargarDatosInicialesLocal() {
             const guardado = localStorage.getItem('bmbarber_data');
-            if(guardado) {
-                window.localState = JSON.parse(guardado);
-            }
+            if(guardado) { window.localState = JSON.parse(guardado); }
             window.actualizarUI();
         }
 
@@ -113,25 +105,10 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #000000;
-            color: #ffffff;
-        }
-        .glass-panel {
-            background: #000000;
-            border: 1px solid #ffffff;
-        }
-        .btn-active {
-            background: #ffffff !important;
-            color: #000000 !important;
-        }
-        input, select {
-            background: #000000 !important;
-            border: 1px solid #ffffff !important;
-            color: #ffffff !important;
-        }
-        /* Personalización del Scrollbar para que combine */
+        body { font-family: 'Inter', sans-serif; background-color: #000000; color: #ffffff; }
+        .glass-panel { background: #000000; border: 1px solid #ffffff; }
+        .btn-active { background: #ffffff !important; color: #000000 !important; }
+        input, select { background: #000000 !important; border: 1px solid #ffffff !important; color: #ffffff !important; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #000000; }
         ::-webkit-scrollbar-thumb { background: #ffffff; }
@@ -139,45 +116,25 @@
 </head>
 <body class="h-screen flex overflow-hidden">
 
-    <!-- -->
+    <!-- Pantalla de Login -->
     <div id="login-screen" class="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center">
         <div class="glass-panel p-12 flex flex-col items-center gap-8 w-full max-w-sm mx-4">
-            <!-- AQUI PON EL LINK DE TU LOGO PARA EL LOGIN -->
             <img src="https://placehold.co/128x128/ffffff/000000?text=Logo" alt="Logo BMbarber" class="w-32 h-32 border-2 border-white object-cover">
-            
             <h1 class="text-3xl font-light uppercase tracking-[0.2em]">BMbarber</h1>
-            
             <div class="w-full">
                 <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') attemptLogin()" class="w-full p-4 text-center tracking-[0.2em] text-sm uppercase placeholder:tracking-normal placeholder:text-gray-600 transition-colors focus:border-gray-400">
                 <p id="login-error" class="text-white text-xs mt-3 text-center opacity-0 transition-opacity">Contraseña incorrecta</p>
             </div>
-
             <button onclick="attemptLogin()" class="w-full border border-white hover:bg-white hover:text-black transition-all py-4 uppercase font-bold text-xs tracking-[0.2em]">Ingresar</button>
         </div>
     </div>
 
-    <!-- -->
-    <div id="modal-confirmacion" class="absolute inset-0 z-[60] bg-black/90 hidden flex flex-col items-center justify-center backdrop-blur-sm transition-opacity">
-        <div class="glass-panel p-8 w-full max-w-sm mx-4 text-center flex flex-col items-center">
-            <i class="ph ph-warning-circle text-4xl mb-4 text-white"></i>
-            <h3 class="text-lg font-bold uppercase tracking-widest mb-2">Eliminar Registro</h3>
-            <p class="text-sm text-gray-400 mb-8">¿Estás seguro que deseas eliminar este corte del historial? Esta acción no se puede deshacer.</p>
-            <div class="flex gap-4 w-full">
-                <button onclick="cerrarModal()" class="flex-1 border border-white py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-800 transition-all">Cancelar</button>
-                <button onclick="ejecutarBorrado()" class="flex-1 bg-white text-black py-3 uppercase text-xs font-bold tracking-widest hover:bg-gray-300 transition-all">Eliminar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- -->
     <!-- Sidebar -->
     <nav class="border-r border-white w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-black">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-white">
-            <!-- AQUI PON EL LINK DE TU LOGO PARA LA BARRA LATERAL -->
             <img src="https://placehold.co/96x96/ffffff/000000?text=Logo" alt="Logo BMbarber" class="w-24 h-24 border-2 border-white object-cover">
             <h1 class="text-lg font-light uppercase tracking-[0.2em]">BMbarber</h1>
         </div>
-        
         <div class="flex md:flex-col w-full md:mt-6 p-2 gap-2">
             <button onclick="navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 flex flex-col md:flex-row items-center gap-2 p-4 rounded-none hover:bg-white hover:text-black transition-all">
                 <i class="ph ph-scissors text-2xl"></i> <span class="text-xs uppercase font-bold tracking-widest">Caja</span>
@@ -194,15 +151,13 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua Fija (Con enlace a WhatsApp) -->
-    <!-- REEMPLAZA EL ENLACE DE ABAJO (https://wa.me/...) CON TU NÚMERO DE WHATSAPP -->
+    <!-- Marca de Agua Fija -->
     <a href="https://wa.me/5491100000000" target="_blank" class="fixed bottom-20 md:bottom-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
-        <!-- AQUI PON EL LINK DE TU LOGO CHIQUITO -->
         <img src="https://placehold.co/32x32/ffffff/000000?text=Logo" alt="Logo de Marca" class="w-8 h-8 rounded-full border border-white object-cover">
         <span class="text-xs font-bold uppercase tracking-widest text-white">by: PSM</span>
     </a>
 
-    <!-- -->
+    <!-- Vistas Principales -->
     <main class="flex-1 h-full overflow-y-auto p-4 md:p-12 pb-24 md:pb-8">
         
         <!-- VISTA CAJA -->
@@ -220,8 +175,6 @@
                 
                 <button onclick="registrarOperacion()" class="w-full bg-white text-black font-bold py-4 uppercase tracking-[0.2em] hover:bg-gray-300 transition-all">Registrar Corte</button>
             </div>
-            
-            <!-- Notificación de éxito -->
             <div id="toast-exito" class="mt-4 p-4 border border-white text-center text-sm font-bold tracking-widest uppercase opacity-0 transition-opacity duration-300 pointer-events-none">
                 ¡Operación Registrada!
             </div>
@@ -231,14 +184,12 @@
         <div id="view-historial" class="view-section hidden max-w-4xl mx-auto">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
                 <h2 class="text-4xl font-light tracking-tighter uppercase">Historial</h2>
-                
                 <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-sm outline-none border-white">
                     <option value="hoy">Solo Hoy</option>
                     <option value="mes" selected>Este Mes</option>
                     <option value="todo">Todo el Historial</option>
                 </select>
             </div>
-
             <div class="glass-panel overflow-x-auto">
                 <table class="w-full text-left">
                     <thead>
@@ -249,12 +200,9 @@
                             <th class="p-4 font-normal text-center">Acción</th>
                         </tr>
                     </thead>
-                    <tbody id="historial-body" class="text-sm">
-                        <!-- Las filas se generan con JS -->
-                    </tbody>
+                    <tbody id="historial-body" class="text-sm"></tbody>
                 </table>
             </div>
-            
             <div class="mt-6 flex justify-end">
                 <div class="glass-panel p-4 inline-block">
                     <span class="text-xs uppercase tracking-widest mr-4">Total Vista:</span>
@@ -263,53 +211,38 @@
             </div>
         </div>
 
-        <!-- VISTA AJUSTES Y GASTOS -->
+        <!-- VISTA AJUSTES -->
         <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto">
             <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Ajustes y Gastos</h2>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- Precios -->
                 <div class="glass-panel p-6">
                     <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-white pb-2">Precios de Servicios</h3>
-                    
                     <label class="block text-xs uppercase tracking-widest mb-2 mt-4">Corte de Pelo (ARS)</label>
                     <input type="number" id="precio-pelo" class="w-full p-3 mb-4 outline-none">
-                    
                     <label class="block text-xs uppercase tracking-widest mb-2">Corte + Barba (ARS)</label>
                     <input type="number" id="precio-barba" class="w-full p-3 mb-6 outline-none">
-                    
                     <button onclick="guardarPrecios()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Precios</button>
                 </div>
-
                 <!-- Gastos Fijos -->
                 <div class="glass-panel p-6">
                     <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-white pb-2">Gastos Fijos Mensuales</h3>
-                    
                     <label class="block text-xs uppercase tracking-widest mb-2">Alquiler (ARS)</label>
                     <input type="number" id="gasto-alquiler" class="w-full p-3 mb-4 outline-none">
-                    
                     <label class="block text-xs uppercase tracking-widest mb-2">Luz (ARS)</label>
                     <input type="number" id="gasto-luz" class="w-full p-3 mb-4 outline-none">
-                    
                     <label class="block text-xs uppercase tracking-widest mb-2">Internet / WiFi (ARS)</label>
                     <input type="number" id="gasto-internet" class="w-full p-3 mb-4 outline-none">
-                    
                     <label class="block text-xs uppercase tracking-widest mb-2">Monotributo (ARS)</label>
                     <input type="number" id="gasto-monotributo" class="w-full p-3 mb-6 outline-none">
-                    
                     <button onclick="guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
-            </div>
-            <!-- Notificación de Ajustes guardados -->
-            <div id="toast-ajustes" class="mt-4 p-4 border border-white text-center text-sm font-bold tracking-widest uppercase opacity-0 transition-opacity duration-300 pointer-events-none">
-                ¡Cambios Guardados!
             </div>
         </div>
 
         <!-- VISTA BALANCE -->
         <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
             <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Balance del Mes Actual</h2>
-            
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="glass-panel p-6 text-center">
                     <p class="text-xs uppercase tracking-widest mb-2">Ingresos del Mes</p>
@@ -324,52 +257,44 @@
                     <p id="bal-estado" class="text-3xl font-bold">$0</p>
                 </div>
             </div>
-
             <div class="glass-panel p-8">
                 <h3 class="text-sm uppercase tracking-widest mb-6">Progreso para cubrir gastos</h3>
-                
-                <!-- Barra de progreso -->
                 <div class="w-full h-8 border border-white p-1 relative mb-4">
                     <div id="bal-barra" class="h-full bg-white transition-all duration-1000 w-0"></div>
                     <div id="bal-porcentaje" class="absolute inset-0 flex items-center justify-center text-xs font-bold mix-blend-difference text-white">0%</div>
                 </div>
-                
                 <p id="bal-mensaje" class="text-center text-sm uppercase tracking-widest mt-6"></p>
             </div>
         </div>
     </main>
 
-    <!-- -->
+    <!-- Lógica de Funciones -->
     <script>
-        // --- LÓGICA DE LOGIN ---
         window.attemptLogin = function() {
             const passInput = document.getElementById('login-password');
             const errorMsg = document.getElementById('login-error');
-            
-            if (passInput.value === 'BMLapidra1092') {
+            if (passInput.value === 'BMLaprida1092') {
                 document.getElementById('login-screen').classList.add('hidden');
                 passInput.value = ''; 
-                window.actualizarUI(); // Refrescar info al entrar
+                window.actualizarUI();
             } else {
                 errorMsg.classList.remove('opacity-0');
                 setTimeout(() => errorMsg.classList.add('opacity-0'), 2000);
             }
         };
 
-        // --- NAVEGACIÓN ---
         window.navigate = function(viewName) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('btn-active'));
-            
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
             document.getElementById(`nav-${viewName}`).classList.add('btn-active');
-            
             window.actualizarUI();
         };
 
-        // --- VISTA CAJA ---
         window.updateCajaPrice = function() {
-            const tipo = document.getElementById('caja-servicio').value;
+            const select = document.getElementById('caja-servicio');
+            if(!select) return;
+            const tipo = select.value;
             const precio = window.localState.precios[tipo] || 0;
             document.getElementById('caja-monto').value = precio;
         };
@@ -377,21 +302,16 @@
         window.registrarOperacion = async function() {
             const tipo = document.getElementById('caja-servicio').value;
             const monto = parseFloat(document.getElementById('caja-monto').value);
-            
             if (isNaN(monto) || monto <= 0) return;
 
-            const nuevaOperacion = {
-                tipo: tipo,
-                monto: monto,
-                timestamp: Date.now()
-            };
+            const nuevaOperacion = { tipo: tipo, monto: monto, timestamp: Date.now() };
 
             if (isFirebaseActive && auth && auth.currentUser) {
                 const uid = auth.currentUser.uid;
                 try {
                     await db.collection("usuarios").doc(uid).collection("cortes").add(nuevaOperacion);
                 } catch (e) {
-                    console.error("Error guardando:", e);
+                    alert("Error al guardar en la nube. Revisa las reglas de Firestore.");
                 }
             } else {
                 nuevaOperacion.id = 'local_' + Date.now();
@@ -400,33 +320,29 @@
                 window.actualizarUI();
             }
 
-            // Mostrar toast
             const toast = document.getElementById('toast-exito');
             toast.classList.remove('opacity-0');
             setTimeout(() => toast.classList.add('opacity-0'), 2000);
         };
 
-        // --- VISTA AJUSTES ---
-        window.mostrarToastAjustes = function() {
-            const toast = document.getElementById('toast-ajustes');
-            toast.classList.remove('opacity-0');
-            setTimeout(() => toast.classList.add('opacity-0'), 2000);
-        }
-
         window.guardarPrecios = async function() {
             const pelo = parseFloat(document.getElementById('precio-pelo').value) || 0;
             const barba = parseFloat(document.getElementById('precio-barba').value) || 0;
-            
             window.localState.precios = { "corte_pelo": pelo, "corte_barba": barba };
             
             if (isFirebaseActive && auth && auth.currentUser) {
                 const uid = auth.currentUser.uid;
-                await db.collection("usuarios").doc(uid).collection("config").doc("precios").set(window.localState.precios);
+                try {
+                    await db.collection("usuarios").doc(uid).collection("config").doc("precios").set(window.localState.precios);
+                    alert("✅ Precios guardados exitosamente en la nube.");
+                } catch (e) {
+                    alert("❌ Error al guardar precios. Revisa tus permisos en Firebase.");
+                }
             } else {
                 window.guardarLocal();
+                alert("✅ Precios guardados (Modo Local).");
             }
-            window.updateCajaPrice();
-            window.mostrarToastAjustes();
+            window.actualizarUI();
         };
 
         window.guardarGastos = async function() {
@@ -436,20 +352,23 @@
                 internet: parseFloat(document.getElementById('gasto-internet').value) || 0,
                 monotributo: parseFloat(document.getElementById('gasto-monotributo').value) || 0
             };
-            
             window.localState.gastos = gastos;
             
             if (isFirebaseActive && auth && auth.currentUser) {
                 const uid = auth.currentUser.uid;
-                await db.collection("usuarios").doc(uid).collection("config").doc("gastos").set(window.localState.gastos);
+                try {
+                    await db.collection("usuarios").doc(uid).collection("config").doc("gastos").set(window.localState.gastos);
+                    alert("✅ Gastos guardados exitosamente en la nube.");
+                } catch (e) {
+                    alert("❌ Error al guardar gastos. Revisa tus permisos en Firebase.");
+                }
             } else {
                 window.guardarLocal();
+                alert("✅ Gastos guardados (Modo Local).");
             }
             window.actualizarUI();
-            window.mostrarToastAjustes();
         };
 
-        // --- FUNCIONES DE UTILIDAD ---
         const formatMoney = (amount) => {
             return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
         };
@@ -465,67 +384,25 @@
             return id;
         };
 
-        //        
-        // --- LÓGICA DE BORRADO Y MODAL ---
-        let registroAEliminarId = null;
-
-        window.borrarRegistro = function(id) {
-            registroAEliminarId = id;
-            document.getElementById('modal-confirmacion').classList.remove('hidden');
-        };
-
-        window.cerrarModal = function() {
-            registroAEliminarId = null;
-            document.getElementById('modal-confirmacion').classList.add('hidden');
-        };
-
-        window.ejecutarBorrado = async function() {
-            if(!registroAEliminarId) return;
-            const id = registroAEliminarId;
-            window.cerrarModal(); // Cerrar el modal inmediatamente
-
-            if (isFirebaseActive && auth && auth.currentUser) {
-                const uid = auth.currentUser.uid;
-                try {
-                    await db.collection("usuarios").doc(uid).collection("cortes").doc(id).delete();
-                } catch (e) {
-                    console.error("Error borrando:", e);
-                }
-            } else {
-                window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
-                window.guardarLocal();
-                window.actualizarUI();
-            }
-        };
-
-        // --- ACTUALIZACIÓN GENERAL DE LA INTERFAZ ---
         window.actualizarUI = function() {
-            // 1. Actualizar Inputs de Ajustes
             document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || '';
             document.getElementById('precio-barba').value = window.localState.precios.corte_barba || '';
-            
             document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || '';
             document.getElementById('gasto-luz').value = window.localState.gastos.luz || '';
             document.getElementById('gasto-internet').value = window.localState.gastos.internet || '';
             document.getElementById('gasto-monotributo').value = window.localState.gastos.monotributo || '';
 
-            // 2. Actualizar Historial
             const filtro = document.getElementById('filtro-historial').value;
             const now = new Date();
             
             let cortesFiltrados = window.localState.cortes.filter(corte => {
                 const fechaCorte = new Date(corte.timestamp);
-                if (filtro === 'hoy') {
-                    return fechaCorte.toDateString() === now.toDateString();
-                } else if (filtro === 'mes') {
-                    return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
-                }
-                return true; // 'todo'
+                if (filtro === 'hoy') return fechaCorte.toDateString() === now.toDateString();
+                if (filtro === 'mes') return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
+                return true; 
             });
 
-            // Ordenar de más nuevo a más viejo
             cortesFiltrados.sort((a,b) => b.timestamp - a.timestamp);
-
             const tbody = document.getElementById('historial-body');
             tbody.innerHTML = '';
             let totalVista = 0;
@@ -549,7 +426,6 @@
 
             document.getElementById('historial-total').textContent = formatMoney(totalVista);
 
-            // 3. Actualizar Balance
             const cortesMes = window.localState.cortes.filter(corte => {
                 const fechaCorte = new Date(corte.timestamp);
                 return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
@@ -561,20 +437,13 @@
 
             document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
             document.getElementById('bal-gastos').textContent = formatMoney(gastosTotales);
-            
-            const balEstadoEl = document.getElementById('bal-estado');
-            balEstadoEl.textContent = formatMoney(estado);
+            document.getElementById('bal-estado').textContent = formatMoney(estado);
 
-            // Barra de progreso
             let porcentaje = 0;
-            if (gastosTotales > 0) {
-                porcentaje = (ingresosTotales / gastosTotales) * 100;
-            } else if (ingresosTotales > 0) {
-                porcentaje = 100;
-            }
+            if (gastosTotales > 0) porcentaje = (ingresosTotales / gastosTotales) * 100;
+            else if (ingresosTotales > 0) porcentaje = 100;
             
             porcentaje = Math.min(Math.round(porcentaje), 100);
-            
             document.getElementById('bal-barra').style.width = `${porcentaje}%`;
             document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
 
@@ -585,14 +454,27 @@
                 mensajeEl.textContent = `Faltan ${formatMoney(Math.abs(estado))} para cubrir los gastos fijos.`;
             }
 
-            // Asegurar que la caja tenga el precio correcto mostrado
             window.updateCajaPrice();
         };
 
-        // Inicialización final
-        window.onload = () => {
-            window.actualizarUI();
+        window.borrarRegistro = async function(id) {
+            if(confirm("¿Seguro que deseas eliminar este registro?")) {
+                if (isFirebaseActive && auth && auth.currentUser) {
+                    const uid = auth.currentUser.uid;
+                    try {
+                        await db.collection("usuarios").doc(uid).collection("cortes").doc(id).delete();
+                    } catch (e) {
+                        alert("Error al borrar el registro en la nube.");
+                    }
+                } else {
+                    window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
+                    window.guardarLocal();
+                    window.actualizarUI();
+                }
+            }
         };
+
+        window.onload = () => { window.actualizarUI(); };
     </script>
 </body>
 </html>
