@@ -50,7 +50,7 @@
         window.localState = {
             cortes: [],
             precios: { "corte_pelo": 5000, "corte_barba": 7000 },
-            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0 }
+            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0, otros: 0 }
         };
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -179,13 +179,13 @@
                 <i class="ph ph-scissors text-xl"></i> <span class="text-[9px] uppercase font-bold tracking-widest">Caja</span>
             </button>
             <button onclick="window.navigate('historial')" id="nav-historial" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1 p-3 transition-all">
-                <i class="ph ph-clock text-xl text-white"></i> <span class="text-[9px] uppercase font-bold tracking-widest text-white">Historial</span>
+                <i class="ph ph-clock text-xl"></i> <span class="text-[9px] uppercase font-bold tracking-widest">Historial</span>
             </button>
             <button onclick="window.navigate('gastos')" id="nav-gastos" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1 p-3 transition-all">
-                <i class="ph ph-gear text-xl text-white"></i> <span class="text-[9px] uppercase font-bold tracking-widest text-white">Ajustes</span>
+                <i class="ph ph-gear text-xl"></i> <span class="text-[9px] uppercase font-bold tracking-widest">Ajustes</span>
             </button>
             <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1 p-3 transition-all">
-                <i class="ph ph-chart-line text-xl text-white"></i> <span class="text-[9px] uppercase font-bold tracking-widest text-white">Balance</span>
+                <i class="ph ph-chart-line text-xl"></i> <span class="text-[9px] uppercase font-bold tracking-widest">Balance</span>
             </button>
         </div>
     </nav>
@@ -281,7 +281,9 @@
                     <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Internet / WiFi (ARS)</label>
                     <input type="number" id="gasto-internet" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm">
                     <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Monotributo (ARS)</label>
-                    <input type="number" id="gasto-monotributo" class="w-full p-2 md:p-3 mb-5 outline-none text-xs md:text-sm">
+                    <input type="number" id="gasto-monotributo" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm">
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Otros Gastos (ARS)</label>
+                    <input type="number" id="gasto-otros" class="w-full p-2 md:p-3 mb-5 outline-none text-xs md:text-sm">
                     <button onclick="window.guardarGastos()" class="w-full border border-white hover:bg-white hover:text-black py-3 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
             </div>
@@ -460,7 +462,8 @@
                 alquiler: parseFloat(document.getElementById('gasto-alquiler').value) || 0,
                 luz: parseFloat(document.getElementById('gasto-luz').value) || 0,
                 internet: parseFloat(document.getElementById('gasto-internet').value) || 0,
-                monotributo: parseFloat(document.getElementById('gasto-monotributo').value) || 0
+                monotributo: parseFloat(document.getElementById('gasto-monotributo').value) || 0,
+                otros: parseFloat(document.getElementById('gasto-otros').value) || 0
             };
             window.localState.gastos = gastos;
             
@@ -503,6 +506,7 @@
                 if(document.getElementById('gasto-luz')) document.getElementById('gasto-luz').value = window.localState.gastos.luz || 0;
                 if(document.getElementById('gasto-internet')) document.getElementById('gasto-internet').value = window.localState.gastos.internet || 0;
                 if(document.getElementById('gasto-monotributo')) document.getElementById('gasto-monotributo').value = window.localState.gastos.monotributo || 0;
+                if(document.getElementById('gasto-otros')) document.getElementById('gasto-otros').value = window.localState.gastos.otros || 0;
 
                 window.updateCajaPrice();
 
@@ -582,9 +586,19 @@
                 const balEstado = document.getElementById('bal-estado');
                 const balLabel = document.getElementById('bal-label-estado');
                 const cajaEstado = document.getElementById('bal-caja-estado');
+                // Buscamos o creamos un contenedor para el gasto total bajo el estado
+                let balGastoTotal = document.getElementById('bal-gasto-total');
+                if (!balGastoTotal) {
+                    balGastoTotal = document.createElement('p');
+                    balGastoTotal.id = 'bal-gasto-total';
+                    balGastoTotal.className = 'text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-70';
+                    balEstado.parentNode.insertBefore(balGastoTotal, balEstado.nextSibling);
+                }
                 
                 if(balEstado) {
                     balEstado.textContent = formatMoney(estado);
+                    balGastoTotal.textContent = `(Gasto Total: ${formatMoney(gastosTotales)})`;
+                    
                     if(estado < 0) {
                         cajaEstado.classList.remove('bg-white', 'text-black');
                         cajaEstado.classList.add('bg-black', 'text-white', 'border', 'border-white');
