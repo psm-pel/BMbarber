@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Panel de Control - BMbarber</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Phosphor Icons -->
@@ -86,10 +87,9 @@
         }
 
         async function cargarDatosInicialesFirebase() {
-            if(!db) return; // Quitamos la dependencia de auth.currentUser
+            if(!db) return; 
             
             try {
-                // Apuntamos todos los dispositivos a la MISMA ruta global
                 const docPrecios = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").get();
                 if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
                 
@@ -100,7 +100,6 @@
             }
 
             try {
-                // Suscripción a la ruta global
                 db.collection("barberias").doc("bmbarber_global").collection("cortes")
                 .orderBy("timestamp", "desc")
                 .onSnapshot((snapshot) => {
@@ -159,8 +158,7 @@
     <!-- Login Screen -->
     <div id="login-screen" class="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center">
         <div class="glass-panel p-8 flex flex-col items-center gap-6 w-full max-w-xs mx-4">
-            <!-- REEMPLAZAR ESTA URL POR ./logobm.jpg -->
-            <img src="./logobm.jpg" alt="Logo BMbarber" class="w-24 h-24 border border-white object-cover rounded-full">
+            <img src="./logobm.jpg" alt="Logo BMbarber" onerror="this.src='https://placehold.co/128x128/ffffff/000000?text=Logo'" class="w-24 h-24 border border-white object-cover rounded-full">
             <h1 class="text-xl font-light uppercase tracking-[0.2em]">BMbarber</h1>
             <div class="w-full">
                 <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-3 text-center tracking-widest text-xs uppercase placeholder:tracking-normal placeholder:text-gray-600 transition-colors">
@@ -173,8 +171,7 @@
     <!-- Navigation Bar -->
     <nav class="border-t border-white/20 md:border-t-0 md:border-r md:border-white w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col bg-black/90 backdrop-blur-md">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-white">
-            <!-- REEMPLAZAR ESTA URL POR ./logobm.jpg -->
-            <img src="./logobm.jpg" alt="Logo BMbarber" class="w-24 h-24 border border-white object-cover rounded-full">
+            <img src="./logobm.jpg" alt="Logo BMbarber" onerror="this.src='https://placehold.co/128x128/ffffff/000000?text=Logo'" class="w-24 h-24 border border-white object-cover rounded-full">
             <h1 class="text-lg font-light uppercase tracking-[0.2em]">BMbarber</h1>
         </div>
         <div class="flex w-full md:flex-col p-1 gap-1">
@@ -193,13 +190,13 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube -->
-    <a href="https://wa.me/543454956044" target="_blank" class="fixed bottom-20 md:bottom-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105 hidden md:flex">
-        <img src="./psm.png" alt="Logo PSM" class="w-8 h-8 rounded-full border border-white object-cover">
-        <span class="text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1">by: PSM</span>
+    <!-- Marca de Agua y Nube - Ahora visible en móvil -->
+    <a href="https://wa.me/543454956044" target="_blank" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:left-4 md:right-auto z-50 flex items-center gap-2 md:gap-3 opacity-60 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
+        <img src="./psm.png" alt="Logo PSM" onerror="this.src='https://placehold.co/128x128/ffffff/000000?text=PSM'" class="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white object-cover">
+        <span class="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-white border border-white p-1 bg-black/50 backdrop-blur-sm">by: PSM</span>
     </a>
 
-    <!-- Cloud Status (Moved to bottom right to avoid blocking titles) -->
+    <!-- Indicador Nube -->
     <div id="cloud-status" class="fixed bottom-20 right-2 md:bottom-4 md:right-4 z-50 flex items-center gap-2 px-2 py-1 md:px-3 border border-white bg-black opacity-90 cursor-default shadow-lg">
         <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-white text-sm md:text-lg transition-colors duration-300"></i>
         <span id="cloud-text" class="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-white transition-colors duration-300">Cargando</span>
@@ -208,24 +205,24 @@
     <main class="flex-1 h-full overflow-y-auto p-4 pt-8 md:p-12 pb-24 text-white">
         
         <!-- VISTA CAJA -->
-        <div id="view-caja" class="view-section max-w-md mx-auto">
-            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Nueva Operación</h2>
-            <div class="glass-panel p-6 md:p-8">
-                <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Servicio Realizado</label>
-                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-3 md:p-4 mb-5 outline-none text-xs md:text-sm">
+        <div id="view-caja" class="view-section max-w-lg mx-auto">
+            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Nueva Operación</h2>
+            <div class="glass-panel p-8">
+                <label class="block text-xs uppercase tracking-widest mb-2">Servicio Realizado</label>
+                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
                     <option value="corte_pelo">Corte de Pelo</option>
                     <option value="corte_barba">Corte de Pelo + Barba</option>
                 </select>
                 
-                <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Método de Pago</label>
-                <select id="caja-metodo" class="w-full p-3 md:p-4 mb-5 outline-none text-xs md:text-sm">
+                <label class="block text-xs uppercase tracking-widest mb-2">Método de Pago</label>
+                <select id="caja-metodo" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm">
                     <option value="efectivo">Efectivo (En negro)</option>
                     <option value="tarjeta">Tarjeta / Transferencia (Blanco)</option>
+                    <option value="amigo">Precio Amigo (Manual)</option>
                 </select>
 
-                <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2">Monto a Cobrar (ARS)</label>
-                <input type="number" id="caja-monto" class="w-full p-3 md:p-4 mb-6 outline-none text-xl md:text-2xl font-light" readonly>
-                
+                <label class="block text-xs uppercase tracking-widest mb-2">Monto a Cobrar (ARS)</label>
+                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-light" readonly>
                 <button onclick="window.registrarOperacion()" class="w-full bg-white text-black font-bold py-3 md:py-4 uppercase text-[10px] md:text-xs tracking-widest hover:bg-gray-300 transition-all">Registrar Corte</button>
             </div>
         </div>
@@ -241,7 +238,6 @@
                 </select>
             </div>
             
-            <!-- Tabla responsiva ajustada para móviles (sin cortar textos) -->
             <div class="glass-panel overflow-x-auto">
                 <table class="w-full text-left min-w-max">
                     <thead>
@@ -293,22 +289,22 @@
 
         <!-- VISTA BALANCE -->
         <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Balance del Mes Actual</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-                <div class="glass-panel p-4 md:p-6 text-center">
-                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2">Ingresos del Mes</p>
-                    <p id="bal-ingresos" class="text-2xl md:text-3xl font-light mb-2">$0</p>
-                    <div class="flex justify-between text-[8px] md:text-[10px] text-gray-400 border-t border-gray-800 pt-2 uppercase tracking-widest mt-2">
-                        <span title="Efectivo">Efec: <b id="bal-ingresos-efectivo" class="text-white">$0</b></span>
-                        <span title="Tarjeta/Transf">Tarj: <b id="bal-ingresos-tarjeta" class="text-white">$0</b></span>
+            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase">Balance del Mes Actual</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="glass-panel p-6 text-center">
+                    <div class="flex justify-center items-center gap-2 mb-2">
+                        <p class="text-xs uppercase tracking-widest">Ingresos</p>
+                        <span id="bal-cantidad-cortes" class="text-[9px] bg-white text-black px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">0 Cortes</span>
+                    </div>
+                    <p id="bal-ingresos" class="text-3xl font-light mb-2">$0</p>
+                    <div class="flex justify-between text-[9px] text-gray-400 border-t border-gray-800 pt-2 uppercase tracking-widest mt-2 gap-1">
+                        <span title="Ingresos en Negro">Efec: <b id="bal-ingresos-efectivo" class="text-white">$0</b></span>
+                        <span title="Ingresos en Blanco">Tarj: <b id="bal-ingresos-tarjeta" class="text-white">$0</b></span>
+                        <span title="Precio Amigo" class="text-blue-400">Amigo: <b id="bal-ingresos-amigo" class="text-white">$0</b></span>
                     </div>
                 </div>
-                <div class="glass-panel p-4 md:p-6 text-center">
-                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2">Gastos Fijos</p>
-                    <p id="bal-gastos" class="text-2xl md:text-3xl font-light">$0</p>
-                </div>
-                <div class="glass-panel p-4 md:p-6 text-center bg-white text-black transition-colors" id="bal-caja-estado">
-                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold text-black" id="bal-label-estado">Estado (Ganancia Libre)</p>
+                <div class="glass-panel p-6 text-center text-white transition-colors" id="bal-caja-estado">
+                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold" id="bal-label-estado">Estado (Ganancia Libre)</p>
                     <p id="bal-estado" class="text-2xl md:text-3xl font-bold">$0</p>
                 </div>
             </div>
@@ -380,30 +376,29 @@
 
         window.navigate = function(viewName) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            
-            // Restablecer estilos de navegación para móvil
-            document.querySelectorAll('.nav-btn').forEach(el => {
-                el.classList.remove('btn-active');
-                el.querySelectorAll('i, span').forEach(child => child.classList.add('text-white'));
-            });
-            
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('btn-active'));
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
-            
-            // Aplicar estilo activo para móvil
-            const activeBtn = document.getElementById(`nav-${viewName}`);
-            activeBtn.classList.add('btn-active');
-            activeBtn.querySelectorAll('i, span').forEach(child => child.classList.remove('text-white'));
-            
+            document.getElementById(`nav-${viewName}`).classList.add('btn-active');
             window.actualizarUI();
         };
 
-        // Lógica de datos
         window.updateCajaPrice = function() {
-            const select = document.getElementById('caja-servicio');
-            if(!select) return;
-            const tipo = select.value;
-            const precio = window.localState.precios[tipo] || 0;
-            document.getElementById('caja-monto').value = precio;
+            const selectServicio = document.getElementById('caja-servicio');
+            const selectMetodo = document.getElementById('caja-metodo');
+            const inputMonto = document.getElementById('caja-monto');
+            
+            if(!selectServicio || !selectMetodo || !inputMonto) return;
+            
+            const tipo = selectServicio.value;
+            const metodo = selectMetodo.value;
+            
+            if (metodo === 'amigo') {
+                inputMonto.readOnly = false;
+                inputMonto.focus();
+            } else {
+                inputMonto.readOnly = true;
+                inputMonto.value = window.localState.precios[tipo] || 0;
+            }
         };
 
         window.registrarOperacion = async function() {
@@ -418,7 +413,7 @@
 
             const nuevaOperacion = { tipo: tipo, metodoPago: metodo, monto: monto, timestamp: Date.now() };
 
-            if (isFirebaseActive && db) { // Quitamos auth y uid
+            if (isFirebaseActive && db) { 
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("cortes").add(nuevaOperacion);
                     window.mostrarNotificacion("Corte Registrado (Nube)");
@@ -446,7 +441,7 @@
             
             window.actualizarUI();
             
-            if (isFirebaseActive && db) { // Quitamos auth y uid
+            if (isFirebaseActive && db) { 
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").set(window.localState.precios);
                     window.mostrarNotificacion("Precios Actualizados (Nube)");
@@ -471,7 +466,7 @@
             
             window.actualizarUI();
             
-            if (isFirebaseActive && db) { // Quitamos auth y uid
+            if (isFirebaseActive && db) { 
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").set(window.localState.gastos);
                     window.mostrarNotificacion("Gastos Actualizados (Nube)");
@@ -495,8 +490,8 @@
         };
 
         const getNombreServicio = (id) => {
-            if(id === 'corte_pelo') return 'Pelo'; // Acortado para móvil
-            if(id === 'corte_barba') return 'Pelo+Barba'; // Acortado para móvil
+            if(id === 'corte_pelo') return 'Pelo'; 
+            if(id === 'corte_barba') return 'Pelo+Barba';
             return id;
         };
 
@@ -529,8 +524,19 @@
                 cortesFiltrados.forEach(corte => {
                     totalVista += corte.monto;
                     
-                    const metodoIcon = corte.metodoPago === 'tarjeta' ? '<i class="ph ph-credit-card text-[14px] md:text-lg" title="Tarjeta/Transferencia"></i>' : '<i class="ph ph-money text-[14px] md:text-lg" title="Efectivo"></i>';
-                    const metodoClass = corte.metodoPago === 'tarjeta' ? 'text-gray-400' : 'text-white';
+                    let metodoIcon = '';
+                    let metodoClass = '';
+                    
+                    if (corte.metodoPago === 'tarjeta') {
+                        metodoIcon = '<i class="ph ph-credit-card text-lg" title="Tarjeta/Transferencia"></i>';
+                        metodoClass = 'text-gray-400';
+                    } else if (corte.metodoPago === 'amigo') {
+                        metodoIcon = '<i class="ph ph-handshake text-lg" title="Precio Amigo"></i>';
+                        metodoClass = 'text-blue-400';
+                    } else {
+                        metodoIcon = '<i class="ph ph-money text-lg" title="Efectivo"></i>';
+                        metodoClass = 'text-white';
+                    }
 
                     const tr = document.createElement('tr');
                     tr.className = 'border-b border-gray-800 hover:bg-gray-900 transition-colors';
@@ -555,9 +561,15 @@
                     return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
                 });
 
+                const cantidadCortes = cortesMes.length;
+                if(document.getElementById('bal-cantidad-cortes')) {
+                    document.getElementById('bal-cantidad-cortes').textContent = `${cantidadCortes} Corte${cantidadCortes !== 1 ? 's' : ''}`;
+                }
+
                 const ingresosTotales = cortesMes.reduce((acc, curr) => acc + curr.monto, 0);
-                const ingresosEfectivo = cortesMes.filter(c => c.metodoPago !== 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosEfectivo = cortesMes.filter(c => c.metodoPago === 'efectivo').reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosTarjeta = cortesMes.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosAmigo = cortesMes.filter(c => c.metodoPago === 'amigo').reduce((acc, curr) => acc + curr.monto, 0);
                 
                 const gastosTotales = Object.values(window.localState.gastos).reduce((acc, curr) => acc + Number(curr), 0);
                 const estado = ingresosTotales - gastosTotales;
@@ -565,7 +577,7 @@
                 if(document.getElementById('bal-ingresos')) document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
                 if(document.getElementById('bal-ingresos-efectivo')) document.getElementById('bal-ingresos-efectivo').textContent = formatMoney(ingresosEfectivo);
                 if(document.getElementById('bal-ingresos-tarjeta')) document.getElementById('bal-ingresos-tarjeta').textContent = formatMoney(ingresosTarjeta);
-                if(document.getElementById('bal-gastos')) document.getElementById('bal-gastos').textContent = formatMoney(gastosTotales);
+                if(document.getElementById('bal-ingresos-amigo')) document.getElementById('bal-ingresos-amigo').textContent = formatMoney(ingresosAmigo);
                 
                 const balEstado = document.getElementById('bal-estado');
                 const balLabel = document.getElementById('bal-label-estado');
@@ -611,7 +623,7 @@
 
         window.borrarRegistro = async function(id) {
             window.abrirConfirmacion("¿Seguro que deseas eliminar este registro?", async () => {
-                if (isFirebaseActive && db) { // Quitamos auth y uid
+                if (isFirebaseActive && db) {
                     try {
                         await db.collection("barberias").doc("bmbarber_global").collection("cortes").doc(id).delete();
                         window.mostrarNotificacion("Corte Eliminado (Nube)");
