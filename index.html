@@ -503,13 +503,13 @@
             const pass = passInput.value;
 
             // Login exitoso si coincide alguna de las contraseñas
-            if (pass === 'BMLaprida1092' || pass === 'laprida1092') {
+            if (pass === 'bmlaprida1092' || pass === 'laprida1092') {
                 
                 // Ocultar pantalla de login
                 document.getElementById('login-screen').classList.add('hidden');
                 
                 // Determinar el rol (Admin o Empleado) y guardarlo en memoria
-                const isAdmin = (pass === 'BMLaprida1092');
+                const isAdmin = (pass === 'bmlaprida1092');
                 window.currentUserRole = isAdmin ? 'admin' : 'empleado';
                 
                 // Seleccionar los botones sensibles
