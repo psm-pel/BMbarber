@@ -28,10 +28,11 @@
         ::-webkit-scrollbar-track { background: #E4E4E4; }
         ::-webkit-scrollbar-thumb { background: #111111; }
         
-        /* Modales */
+        /* Modales y Animaciones */
         .toast-visible { transform: translate(-50%, 0) !important; opacity: 1 !important; }
         .modal-visible { opacity: 1 !important; pointer-events: auto !important; }
 
+        /* Calendario */
         .dia-calendario { cursor: pointer; transition: all 0.2s; }
         .dia-calendario:hover { background-color: #111111; color: #E4E4E4; }
         .dia-hoy { border: 2px solid #22c55e !important; color: #22c55e !important; font-weight: 900; }
@@ -51,7 +52,7 @@
 
         let app, db, auth;
         let isFirebaseActive = false;
-        window.currentUserRole = 'empleado'; // admin | empleado
+        window.currentUserRole = 'empleado'; // 'admin' | 'empleado'
         
         window.localState = {
             cortes: [],
@@ -172,7 +173,7 @@
         </div>
     </div>
 
-    <!-- Modal Nuevo Cliente desde Caja -->
+    <!-- Modal Nuevo Cliente -->
     <div id="modal-nuevo-cliente" class="fixed inset-0 z-[100] bg-[#E4E4E4]/90 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
         <div class="glass-panel p-6 max-w-sm w-full mx-4 bg-[#E4E4E4]">
             <h3 class="text-xs font-bold uppercase tracking-widest mb-4 border-b border-[#111] pb-2 text-[#111]">Registrar Cliente Rápido</h3>
@@ -311,6 +312,9 @@
                                 <input type="text" id="turno-cliente" placeholder="Cliente..." autocomplete="off" class="w-full p-2 outline-none text-xs uppercase border border-[#111]/30 font-bold">
                                 <div id="sugerencias-turno" class="absolute left-0 right-0 top-full mt-1 bg-[#E4E4E4] border border-[#111] shadow-lg z-[60] hidden max-h-48 overflow-y-auto"></div>
                             </div>
+                            <button onclick="window.abrirModalNuevoCliente(document.getElementById('turno-cliente').value)" class="px-3 border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black transition-colors flex items-center justify-center" title="Añadir Cliente Nuevo">
+                                <i class="ph ph-user-plus text-lg"></i>
+                            </button>
                         </div>
                         <input type="text" id="turno-servicio" placeholder="Detalle (Ej: Corte + Barba)" class="w-full p-2 mb-3 outline-none text-xs uppercase border border-[#111]/30 font-bold">
                         <button onclick="guardarTurno()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-2 uppercase text-[10px] font-bold tracking-widest transition-colors">Agendar</button>
@@ -492,10 +496,7 @@
         };
 
         window.abrirModalNuevoCliente = function(nombre = '') {
-            let valorInput = nombre;
-            if(!valorInput && document.getElementById('caja-cliente')) valorInput = document.getElementById('caja-cliente').value;
-            
-            document.getElementById('modal-cliente-nombre').value = valorInput;
+            document.getElementById('modal-cliente-nombre').value = nombre;
             document.getElementById('modal-cliente-telefono').value = '';
             document.getElementById('modal-cliente-cumple').value = '';
             document.getElementById('modal-nuevo-cliente').classList.add('modal-visible');
