@@ -2,50 +2,39 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Control - BMbarber</title>
-    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-        
-        /* Tema Claro/Silver basado en el logo BM Barber */
         body { font-family: 'Inter', sans-serif; background-color: #E4E4E4; color: #111111; }
         
-        /* Paneles con sombra sutil para efecto relieve 3D */
-        .glass-panel { 
-            background: #E4E4E4; 
-            border: 1px solid #111111; 
-            box-shadow: 6px 6px 15px rgba(0,0,0,0.08); 
-        }
-        
-        /* Inversión para botones activos */
+        /* Estilo Silver/Black */
+        .glass-panel { background: #E4E4E4; border: 1px solid #111111; box-shadow: 4px 4px 0px 0px rgba(17,17,17,0.1); }
         .btn-active { background: #111111 !important; color: #E4E4E4 !important; }
-        .btn-active i, .btn-active span { color: #E4E4E4 !important; }
+        input, select { background: #E4E4E4 !important; border: 1px solid #111111 !important; color: #111111 !important; }
+        input:focus, select:focus { border-width: 2px; outline: none; }
         
-        /* Inputs transparentes con bordes negros */
-        input, select { background: transparent !important; border: 1px solid #111111 !important; color: #111111 !important; }
-        
-        /* Scrollbar adaptado al tema claro */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #E4E4E4; }
         ::-webkit-scrollbar-thumb { background: #111111; }
         
-        /* Ocultar barra de scroll en menu movil para que sea limpio */
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
+        /* Modales */
         .toast-visible { transform: translate(-50%, 0) !important; opacity: 1 !important; }
         .modal-visible { opacity: 1 !important; pointer-events: auto !important; }
+
+        .dia-calendario { cursor: pointer; transition: all 0.2s; }
+        .dia-calendario:hover { background-color: #111111; color: #E4E4E4; }
+        .dia-hoy { border: 2px solid #22c55e !important; color: #22c55e; font-weight: 900; }
+        .dia-seleccionado { background-color: #111111; color: #E4E4E4; }
     </style>
     
     <script>
@@ -61,18 +50,22 @@
 
         let app, db, auth;
         let isFirebaseActive = false;
+        window.currentUserRole = 'empleado'; // admin | empleado
+        window.fechaFiltro = Date.now();
         
         window.localState = {
             cortes: [],
-            precios: { "corte_pelo": 5000, "corte_barba": 7000 },
-            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo_tope: 0, monotributo_mes: 0, otros: 0 },
-            inicioPeriodo: null,
             contactos: [],
-            turnos: []
+            turnos: [],
+            precios: { "corte_pelo": 5000, "corte_barba": 7000 },
+            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0, otros: 0 },
+            tope_monotributo: 0,
+            ultimoCierre: 0
         };
 
         window.addEventListener('DOMContentLoaded', () => {
             initApp();
+            renderCalendario();
         });
 
         async function initApp() {
@@ -87,7 +80,7 @@
                         window.actualizarEstadoNube(true);
                         cargarDatosInicialesFirebase();
                     }).catch(error => {
-                        window.mostrarNotificacion("Modo Local (Error de Autenticación)");
+                        window.mostrarNotificacion("Modo Local (Error Auth)");
                         window.actualizarEstadoNube(false);
                         cargarDatosInicialesLocal();
                     });
@@ -103,152 +96,167 @@
         }
 
         async function cargarDatosInicialesFirebase() {
-            if(!db) return; 
-            
+            if(!db) return;
             try {
-                // Lectura de configuraciones desde la ruta global unificada
+                // Siempre lee de bmbarber_global
                 const docPrecios = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").get();
                 if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
                 
                 const docGastos = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").get();
                 if(docGastos.exists) { window.localState.gastos = docGastos.data(); }
-                
-                const docGeneral = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("general").get();
-                if(docGeneral.exists) { window.localState.inicioPeriodo = docGeneral.data().inicioPeriodo; }
-            } catch(e) {}
 
-            try {
-                // Sincronización en tiempo real de cortes, contactos y turnos
+                const docTope = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("tope_monotributo").get();
+                if(docTope.exists) { window.localState.tope_monotributo = docTope.data().valor; }
+
+                const docCierre = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("cierre").get();
+                if(docCierre.exists) { window.localState.ultimoCierre = docCierre.data().timestamp || 0; }
+
+                // Escuchar Cortes
                 db.collection("barberias").doc("bmbarber_global").collection("cortes")
-                .orderBy("timestamp", "desc")
-                .onSnapshot((snapshot) => {
+                .orderBy("timestamp", "desc").onSnapshot((snapshot) => {
                     window.localState.cortes = [];
                     snapshot.forEach((doc) => { window.localState.cortes.push({ id: doc.id, ...doc.data() }); });
                     window.actualizarUI();
                 });
 
+                // Escuchar Contactos
                 db.collection("barberias").doc("bmbarber_global").collection("contactos")
-                .orderBy("nombre", "asc")
                 .onSnapshot((snapshot) => {
                     window.localState.contactos = [];
                     snapshot.forEach((doc) => { window.localState.contactos.push({ id: doc.id, ...doc.data() }); });
                     window.renderContactos();
                 });
 
+                // Escuchar Turnos
                 db.collection("barberias").doc("bmbarber_global").collection("turnos")
                 .onSnapshot((snapshot) => {
                     window.localState.turnos = [];
                     snapshot.forEach((doc) => { window.localState.turnos.push({ id: doc.id, ...doc.data() }); });
                     window.renderCalendario();
-                    if(fechaSeleccionadaStr) window.renderTurnosDelDia();
                 });
-            } catch(e) {}
-            
-            window.actualizarUI();
+
+            } catch(e) {
+                console.error("Error Firebase:", e);
+                cargarDatosInicialesLocal();
+            }
         }
 
         function cargarDatosInicialesLocal() {
             try {
-                const guardado = localStorage.getItem('bmbarber_data');
-                if(guardado) { 
-                    window.localState = JSON.parse(guardado); 
-                    if(!window.localState.contactos) window.localState.contactos = [];
-                    if(!window.localState.turnos) window.localState.turnos = [];
-                    if(!window.localState.gastos.otros) window.localState.gastos.otros = 0;
-                    if(!window.localState.gastos.monotributo_tope) window.localState.gastos.monotributo_tope = 0;
-                    if(!window.localState.gastos.monotributo_mes) window.localState.gastos.monotributo_mes = 0;
-                }
-            } catch(e) {}
+                const guardado = localStorage.getItem('bmbarber_global_data');
+                if(guardado) { window.localState = JSON.parse(guardado); }
+            } catch(e) { console.error("Error local:", e); }
             window.actualizarUI();
             window.renderContactos();
             window.renderCalendario();
         }
 
         window.guardarLocal = function() {
-            localStorage.setItem('bmbarber_data', JSON.stringify(window.localState));
+            try { localStorage.setItem('bmbarber_global_data', JSON.stringify(window.localState)); } 
+            catch(e) {}
         }
     </script>
 </head>
 <body class="h-screen flex overflow-hidden relative">
 
-    <!-- Toast Notification -->
-    <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-[#111111] text-[#E4E4E4] px-6 py-3 text-[10px] md:text-xs font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-xl pointer-events-none whitespace-nowrap border border-[#E4E4E4]">
+    <!-- Datalist para autocompletar clientes -->
+    <datalist id="lista-nombres-contactos"></datalist>
+
+    <!-- Notificación Toast -->
+    <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-[#111] text-[#E4E4E4] px-6 py-3 text-[10px] font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-xl pointer-events-none border border-[#E4E4E4]">
         Mensaje
     </div>
 
-    <!-- Confirmation Modal -->
+    <!-- Modal Confirmación -->
     <div id="confirm-modal" class="fixed inset-0 z-[100] bg-[#E4E4E4]/90 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
-        <div class="glass-panel p-6 max-w-sm w-full mx-4 text-center bg-[#E4E4E4]">
-            <h3 class="text-xs font-bold uppercase tracking-widest mb-6" id="confirm-message">¿Estás seguro?</h3>
+        <div class="glass-panel p-8 max-w-sm w-full mx-4 text-center bg-[#E4E4E4]">
+            <h3 class="text-sm font-bold uppercase tracking-widest mb-8 text-[#111]" id="confirm-message">¿Estás seguro?</h3>
             <div class="flex gap-4">
-                <button onclick="window.cerrarConfirmacion(false)" class="flex-1 border border-[#111] hover:bg-gray-300 py-3 uppercase text-[10px] font-bold tracking-widest transition-colors">Cancelar</button>
+                <button onclick="window.cerrarConfirmacion(false)" class="flex-1 border border-[#111] hover:bg-gray-300 py-3 uppercase text-[10px] font-bold tracking-widest transition-colors text-[#111]">Cancelar</button>
                 <button onclick="window.cerrarConfirmacion(true)" class="flex-1 bg-[#111] text-[#E4E4E4] hover:bg-black py-3 uppercase text-[10px] font-bold tracking-widest transition-colors">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Cliente desde Caja -->
+    <div id="modal-nuevo-cliente" class="fixed inset-0 z-[100] bg-[#E4E4E4]/90 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
+        <div class="glass-panel p-6 max-w-sm w-full mx-4 bg-[#E4E4E4]">
+            <h3 class="text-xs font-bold uppercase tracking-widest mb-4 border-b border-[#111] pb-2 text-[#111]">Registrar Cliente Rápido</h3>
+            
+            <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Nombre Completo *</label>
+            <input type="text" id="modal-cliente-nombre" class="w-full p-2 mb-3 outline-none text-xs uppercase border border-[#111]/30 focus:border-[#111] font-bold">
+            
+            <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Teléfono / WhatsApp</label>
+            <input type="tel" id="modal-cliente-telefono" class="w-full p-2 mb-3 outline-none text-xs border border-[#111]/30 focus:border-[#111] font-bold" placeholder="Ej. 3454123456">
+            
+            <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Cumpleaños</label>
+            <input type="date" id="modal-cliente-cumple" class="w-full p-2 mb-6 outline-none text-xs uppercase border border-[#111]/30 focus:border-[#111] font-bold text-[#111]">
+            
+            <div class="flex gap-4">
+                <button onclick="window.cerrarModalNuevoCliente()" class="flex-1 border border-[#111] hover:bg-gray-300 py-3 uppercase text-[10px] font-bold tracking-widest transition-colors">Cancelar</button>
+                <button onclick="window.guardarContactoDesdeModal()" class="flex-1 bg-[#111] text-[#E4E4E4] hover:bg-black py-3 uppercase text-[10px] font-bold tracking-widest transition-colors">Guardar</button>
             </div>
         </div>
     </div>
 
     <!-- Login Screen -->
     <div id="login-screen" class="absolute inset-0 z-50 bg-[#E4E4E4] flex flex-col items-center justify-center">
-        <div class="glass-panel p-8 flex flex-col items-center gap-6 w-full max-w-xs mx-4 bg-[#E4E4E4]">
-            <img src="./logobm.jpg" alt="Logo BMbarber" onerror="this.src='https://placehold.co/128x128/111111/E4E4E4?text=BM'" class="w-24 h-24 border-2 border-[#111] object-cover rounded-full shadow-lg">
-            <h1 class="text-xl font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
+        <div class="glass-panel p-12 flex flex-col items-center gap-8 w-full max-w-sm mx-4 bg-[#E4E4E4]">
+            <div class="w-24 h-24 bg-[#111] text-[#E4E4E4] rounded-full flex items-center justify-center text-3xl font-black mb-2 shadow-lg">BM</div>
+            <h1 class="text-2xl font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
             <div class="w-full">
-                <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-3 text-center tracking-widest text-xs uppercase placeholder:tracking-normal placeholder:text-gray-500 transition-colors focus:ring-2 focus:ring-[#111] outline-none">
-                <p id="login-error" class="text-red-600 text-[10px] mt-2 text-center opacity-0 transition-opacity font-bold">Contraseña incorrecta</p>
+                <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-4 text-center tracking-[0.2em] text-sm uppercase placeholder:tracking-normal placeholder:text-gray-500 font-bold focus:ring-2 focus:ring-[#111]">
+                <p id="login-error" class="text-red-500 text-xs mt-3 text-center font-bold opacity-0 transition-opacity uppercase tracking-widest">Contraseña incorrecta</p>
             </div>
-            <button onclick="window.attemptLogin()" class="w-full border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black transition-all py-3 uppercase font-bold text-[10px] tracking-[0.2em]">Ingresar</button>
+            <button onclick="window.attemptLogin()" class="w-full bg-[#111] text-[#E4E4E4] hover:bg-black transition-all py-4 uppercase font-black text-xs tracking-[0.2em]">Ingresar</button>
         </div>
     </div>
 
-    <!-- Navigation Bar -->
-    <nav class="border-t border-[#111]/20 md:border-t-0 md:border-r md:border-[#111] w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col bg-[#E4E4E4]/95 backdrop-blur-md">
+    <nav class="border-r border-[#111] w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-[#E4E4E4] overflow-x-auto overflow-y-hidden md:overflow-hidden">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-[#111]">
-            <img src="./logobm.jpg" alt="Logo BMbarber" onerror="this.src='https://placehold.co/128x128/111111/E4E4E4?text=BM'" class="w-24 h-24 border-2 border-[#111] object-cover rounded-full shadow-md">
-            <h1 class="text-lg font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
+            <div class="w-16 h-16 bg-[#111] text-[#E4E4E4] rounded-full flex items-center justify-center text-xl font-black shadow-md">BM</div>
+            <h1 class="text-sm font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
         </div>
-        
-        <div class="flex w-full md:flex-col p-1 gap-1 overflow-x-auto overflow-y-hidden snap-x hide-scrollbar">
-            <button onclick="window.navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
-                <i class="ph ph-scissors text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Caja</span>
+        <div class="flex md:flex-col w-max md:w-full md:mt-6 p-2 gap-2 min-w-full">
+            <button onclick="window.navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
+                <i class="ph ph-scissors text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Caja</span>
             </button>
-            <button onclick="window.navigate('calendario')" id="nav-calendario" class="nav-btn flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
-                <i class="ph ph-calendar-plus text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Turnos</span>
+            <button onclick="window.navigate('turnos')" id="nav-turnos" class="nav-btn flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
+                <i class="ph ph-calendar text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Turnos</span>
             </button>
-            <button onclick="window.navigate('contactos')" id="nav-contactos" class="nav-btn flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
-                <i class="ph ph-users text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Agenda</span>
+            <button onclick="window.navigate('agenda')" id="nav-agenda" class="nav-btn flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
+                <i class="ph ph-address-book text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Agenda</span>
             </button>
-            <button onclick="window.navigate('historial')" id="nav-historial" class="nav-btn flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
-                <i class="ph ph-clock text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Historial</span>
+            <button onclick="window.navigate('historial')" id="nav-historial" class="nav-btn admin-only flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
+                <i class="ph ph-clock text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Historial</span>
             </button>
-            <button onclick="window.navigate('gastos')" id="nav-gastos" class="nav-btn flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
-                <i class="ph ph-gear text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Ajustes</span>
+            <button onclick="window.navigate('gastos')" id="nav-gastos" class="nav-btn admin-only flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
+                <i class="ph ph-gear text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Ajustes</span>
             </button>
-            <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
-                <i class="ph ph-chart-line text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Balance</span>
+            <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn admin-only flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
+                <i class="ph ph-chart-line text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Balance</span>
             </button>
         </div>
     </nav>
 
-    <!-- Marca de Agua visible en PC y Móvil -->
-    <a href="https://wa.me/543454956044" target="_blank" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:left-4 md:right-auto z-50 flex items-center gap-2 md:gap-3 opacity-70 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
-        <img src="./psm.png" alt="Logo PSM" onerror="this.src='https://placehold.co/128x128/111111/E4E4E4?text=PSM'" class="w-6 h-6 md:w-8 md:h-8 rounded-full border border-[#111] object-cover">
-        <span class="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/80 backdrop-blur-sm">by: PSM</span>
+    <!-- Marca de Agua y Nube -->
+    <a href="https://wa.me/5491100000000" target="_blank" class="fixed top-4 right-20 md:bottom-4 md:top-auto md:left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
+        <span class="text-[9px] font-black uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/50 backdrop-blur">by: PSM</span>
     </a>
 
-    <!-- Indicador Nube -->
-    <div id="cloud-status" class="fixed bottom-20 right-2 md:bottom-4 md:right-4 z-50 flex items-center gap-2 px-2 py-1 md:px-3 border border-[#111] bg-[#E4E4E4] opacity-90 cursor-default shadow-lg">
-        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-[#111] text-sm md:text-lg transition-colors duration-300"></i>
-        <span id="cloud-text" class="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-[#111] transition-colors duration-300">Cargando</span>
+    <div id="cloud-status" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:right-4 z-50 flex items-center gap-2 px-2 py-1 border border-[#111] bg-[#E4E4E4] cursor-default shadow-sm" title="Conectando...">
+        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-[#111] text-base transition-colors duration-300"></i>
+        <span id="cloud-text" class="text-[8px] font-black uppercase tracking-widest text-[#111] transition-colors duration-300">Cargando</span>
     </div>
 
-    <main class="flex-1 h-full overflow-y-auto p-4 pt-8 md:p-12 pb-24 text-[#111]">
+    <main class="flex-1 h-full overflow-y-auto p-4 md:p-12 pb-24 md:pb-8">
         
         <!-- VISTA CAJA -->
         <div id="view-caja" class="view-section max-w-lg mx-auto">
-            <h2 class="text-4xl font-black mb-10 tracking-tighter uppercase">Nueva Operación</h2>
-            <div class="glass-panel p-8">
+            <h2 class="text-3xl md:text-4xl font-black mb-8 tracking-tighter uppercase text-[#111]">Nueva Operación</h2>
+            <div class="glass-panel p-6 md:p-8 bg-white/50">
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Servicio Realizado</label>
-                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer font-bold">
+                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm font-bold cursor-pointer">
                     <option value="corte_pelo">Corte de Pelo</option>
                     <option value="corte_barba">Corte de Pelo + Barba</option>
                 </select>
@@ -260,207 +268,210 @@
                     <option value="amigo">Precio Amigo</option>
                 </select>
 
+                <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Cliente (Opcional)</label>
+                <div class="flex gap-2 mb-6">
+                    <input type="text" id="caja-cliente" placeholder="Nombre..." list="lista-nombres-contactos" class="flex-1 p-4 outline-none text-sm uppercase font-bold focus:ring-2 focus:ring-[#111]">
+                    <button onclick="window.abrirModalNuevoCliente()" class="px-5 border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black transition-colors flex items-center justify-center" title="Añadir Cliente Nuevo">
+                        <i class="ph ph-user-plus text-xl"></i>
+                    </button>
+                </div>
+
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Monto a Cobrar (ARS)</label>
                 <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-black focus:ring-2 focus:ring-[#111]" readonly>
-                <button onclick="window.registrarOperacion()" class="w-full border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black font-bold py-3 md:py-4 uppercase text-[10px] md:text-xs tracking-widest transition-all shadow-md">Registrar Corte</button>
+                
+                <button onclick="window.registrarOperacion()" class="w-full bg-[#111] text-[#E4E4E4] font-black py-4 uppercase tracking-[0.2em] hover:bg-black transition-all shadow-md">Registrar Corte</button>
             </div>
         </div>
 
-        <!-- VISTA CALENDARIO -->
-        <div id="view-calendario" class="view-section hidden max-w-5xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-black mb-6 md:mb-10 tracking-tighter uppercase">Calendario</h2>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-                <div class="glass-panel p-4 md:p-6">
+        <!-- VISTA TURNOS -->
+        <div id="view-turnos" class="view-section hidden max-w-4xl mx-auto">
+            <h2 class="text-3xl md:text-4xl font-black mb-8 tracking-tighter uppercase text-[#111]">Turnos</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Calendario -->
+                <div class="glass-panel p-6 bg-white/50 h-min">
                     <div class="flex justify-between items-center mb-6 border-b border-[#111] pb-4">
-                        <button onclick="window.cambiarMes(-1)" class="p-2 hover:bg-[#111] hover:text-[#E4E4E4] transition-colors border border-[#111]"><i class="ph ph-caret-left"></i></button>
-                        <h3 id="calendario-mes-anio" class="text-sm md:text-lg uppercase tracking-widest font-bold">Mes Año</h3>
-                        <button onclick="window.cambiarMes(1)" class="p-2 hover:bg-[#111] hover:text-[#E4E4E4] transition-colors border border-[#111]"><i class="ph ph-caret-right"></i></button>
+                        <button onclick="cambiarMes(-1)" class="p-2 hover:bg-gray-300 transition-colors rounded"><i class="ph ph-caret-left text-xl font-bold"></i></button>
+                        <h3 id="mes-actual" class="text-sm uppercase tracking-widest font-black text-[#111]">Mes Año</h3>
+                        <button onclick="cambiarMes(1)" class="p-2 hover:bg-gray-300 transition-colors rounded"><i class="ph ph-caret-right text-xl font-bold"></i></button>
                     </div>
-                    <div id="calendario-grid" class="grid grid-cols-7 gap-1 md:gap-2"></div>
+                    <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-widest mb-2 text-gray-600">
+                        <div>Do</div><div>Lu</div><div>Ma</div><div>Mi</div><div>Ju</div><div>Vi</div><div>Sa</div>
+                    </div>
+                    <div id="dias-calendario" class="grid grid-cols-7 gap-1 text-center text-sm font-bold">
+                        <!-- Generado por JS -->
+                    </div>
                 </div>
 
-                <div class="glass-panel p-4 md:p-6 flex flex-col h-auto min-h-[500px]">
-                    <h3 class="text-xs md:text-sm uppercase tracking-widest border-b border-[#111] pb-2 mb-4 font-bold">Turnos: <span id="turnos-fecha-texto" class="font-bold text-gray-500">Selecciona un día</span></h3>
+                <!-- Agenda del día seleccionado -->
+                <div class="glass-panel p-6 bg-[#E4E4E4]">
+                    <h3 id="titulo-agenda-dia" class="text-sm uppercase tracking-widest mb-6 border-b border-[#111] pb-2 font-black text-[#111]">Agenda del día</h3>
                     
-                    <div id="lista-turnos" class="flex-1 overflow-y-auto mb-4 space-y-2 pr-2 pb-4">
-                        <p class="text-xs text-gray-500 uppercase tracking-widest text-center mt-4 font-bold">Toca un día en el calendario</p>
+                    <div class="mb-6 bg-white/30 p-4 border border-[#111]/20">
+                        <h4 class="text-[10px] uppercase tracking-widest mb-3 font-bold text-gray-600">Nuevo Turno</h4>
+                        <div class="flex gap-2 mb-3">
+                            <input type="time" id="turno-hora" class="p-2 outline-none text-xs border border-[#111]/30 font-bold w-24">
+                            <input type="text" id="turno-cliente" placeholder="Cliente..." list="lista-nombres-contactos" class="flex-1 p-2 outline-none text-xs uppercase border border-[#111]/30 font-bold">
+                        </div>
+                        <input type="text" id="turno-servicio" placeholder="Detalle (Ej: Corte + Barba)" class="w-full p-2 mb-3 outline-none text-xs uppercase border border-[#111]/30 font-bold">
+                        <button onclick="guardarTurno()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-2 uppercase text-[10px] font-bold tracking-widest transition-colors">Agendar</button>
                     </div>
 
-                    <div class="border-t border-[#111] pt-4 mt-auto">
-                        <h4 class="text-[10px] uppercase tracking-widest mb-3 font-bold text-[#111]">Agendar Nuevo Turno</h4>
-                        <div class="flex gap-2 mb-2">
-                            <input type="time" id="turno-hora" class="p-2 text-xs outline-none w-24 border border-[#111]/30 focus:border-[#111] font-bold">
-                            <input type="text" id="turno-cliente" placeholder="Nombre..." list="lista-nombres-contactos" class="flex-1 p-2 text-xs outline-none uppercase border border-[#111]/30 focus:border-[#111] font-bold">
-                            <datalist id="lista-nombres-contactos"></datalist>
-                        </div>
-                        <input type="text" id="turno-detalle" placeholder="Servicio (Ej. Pelo y Barba)..." class="w-full p-2 text-xs outline-none mb-3 uppercase border border-[#111]/30 focus:border-[#111] font-bold">
-                        <button onclick="window.guardarTurno()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-2 md:py-3 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all">Guardar Turno</button>
+                    <div id="lista-turnos-dia" class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                        <!-- Turnos del día generados por JS -->
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- VISTA CONTACTOS -->
-        <div id="view-contactos" class="view-section hidden max-w-5xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-black mb-6 md:mb-10 tracking-tighter uppercase">Agenda de Clientes</h2>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-                <div class="glass-panel p-5 md:p-6 lg:col-span-1 h-fit">
-                    <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-6 border-b border-[#111] pb-2 font-bold">Nuevo Cliente</h3>
+        <!-- VISTA AGENDA (CONTACTOS) -->
+        <div id="view-agenda" class="view-section hidden max-w-4xl mx-auto">
+            <h2 class="text-3xl md:text-4xl font-black mb-8 tracking-tighter uppercase text-[#111]">Agenda de Clientes</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="glass-panel p-6 lg:col-span-1 bg-white/50 h-min">
+                    <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-[#111] pb-2 font-black">Nuevo Contacto</h3>
+                    <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Nombre Completo *</label>
+                    <input type="text" id="contacto-nombre" class="w-full p-3 mb-4 outline-none text-xs uppercase font-bold focus:ring-2 focus:ring-[#111]">
                     
-                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Nombre Completo *</label>
-                    <input type="text" id="contacto-nombre" class="w-full p-3 mb-4 outline-none text-xs md:text-sm uppercase border border-[#111]/30 focus:border-[#111] font-bold">
+                    <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Teléfono / WhatsApp</label>
+                    <input type="tel" id="contacto-telefono" class="w-full p-3 mb-4 outline-none text-xs font-bold focus:ring-2 focus:ring-[#111]" placeholder="Ej: 3454123456">
                     
-                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Teléfono / WhatsApp</label>
-                    <input type="tel" id="contacto-telefono" class="w-full p-3 mb-4 outline-none text-xs md:text-sm border border-[#111]/30 focus:border-[#111] font-bold" placeholder="Ej. 3454123456">
+                    <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Cumpleaños</label>
+                    <input type="date" id="contacto-cumple" class="w-full p-3 mb-6 outline-none text-xs uppercase font-bold focus:ring-2 focus:ring-[#111] text-[#111]">
                     
-                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Fecha de Nacimiento</label>
-                    <input type="date" id="contacto-cumple" class="w-full p-3 mb-6 outline-none text-xs md:text-sm text-[#111] uppercase border border-[#111]/30 focus:border-[#111] font-bold">
-                    
-                    <button onclick="window.guardarContacto()" class="w-full border border-[#111] bg-[#111] text-[#E4E4E4] font-bold py-3 md:py-4 uppercase text-[10px] md:text-xs tracking-widest hover:bg-black transition-all">Añadir a la Agenda</button>
+                    <button onclick="guardarContacto()" class="w-full bg-[#111] text-[#E4E4E4] font-black py-3 uppercase text-[10px] tracking-widest hover:bg-black transition-colors">Guardar Cliente</button>
                 </div>
-
-                <div class="glass-panel p-5 md:p-6 lg:col-span-2">
-                    <div class="flex justify-between items-center mb-4 border-b border-[#111] pb-2">
-                        <h3 class="text-[10px] md:text-sm uppercase tracking-widest font-bold">Directorio</h3>
-                        <span id="contactos-contador" class="text-[10px] bg-[#111] text-[#E4E4E4] px-2 py-0.5 rounded-full font-bold shadow">0</span>
+                
+                <div class="glass-panel p-6 lg:col-span-2 bg-[#E4E4E4]">
+                    <div class="flex justify-between items-center mb-6 border-b border-[#111] pb-2">
+                        <h3 class="text-sm uppercase tracking-widest font-black text-[#111]">Directorio</h3>
+                        <input type="text" id="buscar-contacto" onkeyup="window.renderContactos()" placeholder="Buscar..." class="p-2 text-xs uppercase font-bold border-b border-[#111] bg-transparent outline-none w-32 md:w-48">
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left min-w-max">
-                            <thead>
-                                <tr class="border-b border-[#111]/40 uppercase text-[9px] tracking-widest text-gray-600 font-bold">
-                                    <th class="pb-2">Nombre</th>
-                                    <th class="pb-2">Teléfono</th>
-                                    <th class="pb-2">Cumpleaños</th>
-                                    <th class="pb-2 text-right">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody id="lista-contactos-body" class="text-[10px] md:text-xs">
-                                <!-- Generado por JS -->
-                            </tbody>
-                        </table>
+                    <div id="lista-contactos" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2">
+                        <!-- Generado por JS -->
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- VISTA HISTORIAL -->
-        <div id="view-historial" class="view-section hidden max-w-4xl mx-auto">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-10 gap-4">
-                <h2 class="text-2xl md:text-4xl font-black tracking-tighter uppercase">Historial</h2>
-                <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-xs md:text-sm outline-none border-[#111] w-full md:w-auto font-bold bg-[#E4E4E4] cursor-pointer">
+        <div id="view-historial" class="view-section hidden max-w-4xl mx-auto admin-only-view">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+                <h2 class="text-3xl md:text-4xl font-black tracking-tighter uppercase text-[#111]">Historial</h2>
+                <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-xs outline-none border-[#111] font-bold cursor-pointer">
                     <option value="hoy">Solo Hoy</option>
-                    <option value="mes" selected>Periodo Actual</option>
+                    <option value="periodo" selected>Periodo Actual</option>
                     <option value="todo">Todo el Historial</option>
                 </select>
             </div>
-            
-            <div class="glass-panel overflow-x-auto">
-                <table class="w-full text-left min-w-max">
+            <div class="glass-panel overflow-x-auto bg-white/50">
+                <table class="w-full text-left">
                     <thead>
-                        <tr class="border-b border-[#111] uppercase text-[9px] md:text-xs tracking-widest font-bold">
-                            <th class="p-3 md:p-4">Fecha</th>
-                            <th class="p-3 md:p-4">Servicio</th>
-                            <th class="p-3 md:p-4 text-center">Pago</th>
-                            <th class="p-3 md:p-4 text-right">Monto</th>
-                            <th class="p-3 md:p-4 text-center">Acción</th>
+                        <tr class="border-b border-[#111] uppercase text-[10px] tracking-widest text-gray-700 bg-[#E4E4E4]">
+                            <th class="p-3 md:p-4 font-bold">Fecha</th>
+                            <th class="p-3 md:p-4 font-bold">Servicio / Cliente</th>
+                            <th class="p-3 md:p-4 font-bold text-center">Met.</th>
+                            <th class="p-3 md:p-4 font-bold text-right">Monto</th>
+                            <th class="p-3 md:p-4 font-bold text-center">X</th>
                         </tr>
                     </thead>
-                    <tbody id="historial-body" class="text-[10px] md:text-sm"></tbody>
+                    <tbody id="historial-body" class="text-sm"></tbody>
                 </table>
             </div>
-            <div class="mt-4 md:mt-6 flex justify-end">
-                <div class="glass-panel p-3 md:p-4 inline-block flex items-center gap-4 bg-[#111] text-[#E4E4E4]">
-                    <span class="text-[10px] md:text-xs uppercase tracking-widest font-bold">Total Vista:</span>
+            <div class="mt-6 flex justify-end">
+                <div class="glass-panel p-4 inline-block bg-[#111] text-[#E4E4E4]">
+                    <span class="text-[10px] uppercase tracking-widest mr-4 font-bold">Total Vista:</span>
                     <span id="historial-total" class="text-xl md:text-2xl font-black">$0</span>
                 </div>
             </div>
         </div>
 
         <!-- VISTA AJUSTES -->
-        <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-black mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Ajustes y Gastos</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                <div class="glass-panel p-5 md:p-6">
-                    <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-4 md:mb-6 border-b border-[#111] pb-2 font-bold">Precios de Servicios</h3>
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 mt-4 font-bold text-gray-700">Corte de Pelo (ARS)</label>
-                    <input type="number" id="precio-pelo" class="w-full p-2 md:p-3 mb-4 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Corte + Barba (ARS)</label>
-                    <input type="number" id="precio-barba" class="w-full p-2 md:p-3 mb-5 outline-none text-xs md:text-sm font-bold">
-                    <button onclick="window.guardarPrecios()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-3 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all">Actualizar Precios</button>
+        <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto admin-only-view">
+            <h2 class="text-3xl md:text-4xl font-black mb-8 tracking-tighter uppercase text-[#111]">Ajustes y Gastos</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="glass-panel p-6 bg-white/50">
+                    <h3 class="text-sm font-black uppercase tracking-widest mb-6 border-b border-[#111] pb-2 text-[#111]">Precios de Servicios</h3>
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700 mt-4">Corte de Pelo (ARS)</label>
+                    <input type="number" id="precio-pelo" class="w-full p-3 mb-4 outline-none font-bold">
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Corte + Barba (ARS)</label>
+                    <input type="number" id="precio-barba" class="w-full p-3 mb-6 outline-none font-bold">
+                    <button onclick="window.guardarPrecios()" class="w-full bg-[#111] text-[#E4E4E4] hover:bg-black py-3 uppercase text-[10px] font-bold tracking-widest transition-all">Actualizar Precios</button>
                 </div>
-                <div class="glass-panel p-5 md:p-6">
-                    <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-4 md:mb-6 border-b border-[#111] pb-2 font-bold">Gastos Fijos Mensuales</h3>
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Alquiler (ARS)</label>
-                    <input type="number" id="gasto-alquiler" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Luz (ARS)</label>
-                    <input type="number" id="gasto-luz" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Internet / WiFi (ARS)</label>
-                    <input type="number" id="gasto-internet" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700 text-purple-700">Tope Monotributo (ARS)</label>
-                    <input type="number" id="gasto-monotributo-tope" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700 text-purple-700">Monotributo Mes (ARS)</label>
-                    <input type="number" id="gasto-monotributo-mes" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700 text-blue-700">Otros Gastos (ARS)</label>
-                    <input type="number" id="gasto-otros" class="w-full p-2 md:p-3 mb-5 outline-none text-xs md:text-sm font-bold">
-                    <button onclick="window.guardarGastos()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-3 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
+                <div class="glass-panel p-6 bg-white/50">
+                    <h3 class="text-sm font-black uppercase tracking-widest mb-6 border-b border-[#111] pb-2 text-[#111]">Gastos Fijos y AFIP</h3>
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Tope Monotributo Mensual (ARS)</label>
+                    <input type="number" id="tope-monotributo" class="w-full p-3 mb-4 outline-none font-bold bg-white" placeholder="Límite facturación mensual">
+                    
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700 mt-4 border-t border-[#111]/20 pt-4">Alquiler (ARS)</label>
+                    <input type="number" id="gasto-alquiler" class="w-full p-3 mb-4 outline-none font-bold">
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Luz (ARS)</label>
+                    <input type="number" id="gasto-luz" class="w-full p-3 mb-4 outline-none font-bold">
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Internet / WiFi (ARS)</label>
+                    <input type="number" id="gasto-internet" class="w-full p-3 mb-4 outline-none font-bold">
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Monotributo MES (Costo a pagar)</label>
+                    <input type="number" id="gasto-monotributo" class="w-full p-3 mb-4 outline-none font-bold" placeholder="Cuota mensual AFIP">
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Otros (Insumos, etc.)</label>
+                    <input type="number" id="gasto-otros" class="w-full p-3 mb-6 outline-none font-bold">
+                    <button onclick="window.guardarGastos()" class="w-full bg-[#111] text-[#E4E4E4] hover:bg-black py-3 uppercase text-[10px] font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
             </div>
         </div>
 
         <!-- VISTA BALANCE -->
-        <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
-            <h2 class="text-4xl font-black mb-10 tracking-tighter uppercase">Balance</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <!-- CAJA 1: Ingresos -->
-                <div class="glass-panel p-6 text-center relative">
-                    <div class="flex justify-center items-center gap-2 mb-2">
-                        <p class="text-xs uppercase tracking-widest font-bold">Ingresos</p>
-                        <span id="bal-cantidad-cortes" class="text-[9px] bg-[#111] text-[#E4E4E4] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest shadow">0 Cortes</span>
-                    </div>
-                    <p id="bal-ingresos" class="text-3xl font-black mb-2">$0</p>
-                    <div class="flex justify-between text-[9px] text-gray-600 border-t border-[#111]/30 pt-2 uppercase tracking-widest mt-2 gap-1 font-bold">
-                        <span title="Ingresos en Negro">Efec: <b id="bal-ingresos-efectivo" class="text-[#111]">$0</b></span>
-                        <span title="Ingresos en Blanco">Tarj: <b id="bal-ingresos-tarjeta" class="text-[#111]">$0</b></span>
-                        <span title="Precio Amigo" class="text-blue-600">Amigo: <b id="bal-ingresos-amigo" class="text-[#111]">$0</b></span>
-                    </div>
-                </div>
-
-                <!-- CAJA 2: Estado (Libre/Deuda) -->
-                <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-estado">
-                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold" id="bal-label-estado">Estado (Ganancia Libre)</p>
-                    <p id="bal-estado" class="text-2xl md:text-3xl font-black mb-1">$0</p>
-                    <p id="bal-gasto-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-80 font-bold">(Gasto Total: $0)</p>
-                </div>
-                
-                <!-- CAJA 3: Margen AFIP -->
-                <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-monotributo">
-                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold text-gray-700" id="bal-label-monotributo" title="Tope - Ingresos en Blanco">Margen AFIP (Blanco)</p>
-                    <p id="bal-margen-monotributo" class="text-2xl md:text-3xl font-black mb-1">$0</p>
-                    <p id="bal-tope-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-80 font-bold text-gray-600">(Tope: $0)</p>
-                </div>
+        <div id="view-balance" class="view-section hidden max-w-5xl mx-auto admin-only-view">
+            <div class="flex justify-between items-end mb-8">
+                <h2 class="text-3xl md:text-4xl font-black tracking-tighter uppercase text-[#111]">Balance</h2>
+                <span class="text-[10px] font-bold tracking-widest uppercase bg-[#111] text-[#E4E4E4] px-3 py-1">Periodo Actual</span>
             </div>
             
-            <div class="glass-panel p-5 md:p-8 mb-8">
-                <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-4 md:mb-6 font-bold">Progreso para cubrir gastos</h3>
-                <div class="w-full h-6 md:h-8 border border-[#111] p-1 relative mb-3 md:mb-4 bg-[#E4E4E4]">
-                    <div id="bal-barra" class="h-full bg-[#111] transition-all duration-1000 w-0"></div>
-                    <div id="bal-porcentaje" class="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs font-bold mix-blend-difference text-white">0%</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Ingresos -->
+                <div class="glass-panel p-6 text-center bg-white/50">
+                    <div class="flex justify-center items-center gap-2 mb-3">
+                        <p class="text-xs uppercase tracking-widest font-bold text-gray-700">Ingresos</p>
+                        <span id="bal-cortes-count" class="text-[9px] bg-[#111] text-[#E4E4E4] px-2 py-0.5 rounded-full font-bold">0 Cortes</span>
+                    </div>
+                    <p id="bal-ingresos" class="text-3xl font-black mb-3 text-[#111]">$0</p>
+                    <div class="flex justify-between text-[9px] text-gray-600 border-t border-[#111]/20 pt-3 uppercase tracking-widest font-bold">
+                        <span>Efec: <b id="bal-ingresos-efectivo" class="text-[#111]">$0</b></span>
+                        <span>Tarj: <b id="bal-ingresos-tarjeta" class="text-[#111]">$0</b></span>
+                        <span class="text-blue-600">Amigo: <b id="bal-ingresos-amigo">$0</b></span>
+                    </div>
                 </div>
-                <p id="bal-mensaje" class="text-center text-[9px] md:text-sm uppercase tracking-widest mt-4 md:mt-6 font-bold"></p>
+
+                <!-- Estado (Ganancia Real) -->
+                <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-estado">
+                    <p class="text-[10px] uppercase tracking-widest mb-2 font-black" id="bal-label-estado">Estado (Falta para cubrir)</p>
+                    <p id="bal-estado" class="text-3xl font-black mb-2">$0</p>
+                    <p class="text-[9px] uppercase tracking-widest font-bold opacity-70" id="bal-gasto-total-label">(Gasto Total: $0)</p>
+                </div>
+
+                <!-- Margen AFIP (Blanco) -->
+                <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center bg-white/50 border-[#111]" id="bal-caja-afip">
+                    <p class="text-[10px] uppercase tracking-widest mb-2 font-black text-gray-700" id="bal-label-afip">Margen AFIP (Blanco)</p>
+                    <p id="bal-afip" class="text-3xl font-black mb-2 text-[#111]">$0</p>
+                    <p class="text-[9px] uppercase tracking-widest font-bold text-gray-500" id="bal-tope-label">Tope: $0</p>
+                </div>
             </div>
 
-            <!-- Botón Finalizar Mes -->
-            <div class="glass-panel p-6 md:p-8 flex flex-col items-center justify-center text-center border border-red-500 bg-[#E4E4E4]">
-                <h3 class="text-sm uppercase tracking-widest mb-3 text-[#111] font-bold"><i class="ph ph-calendar-check mr-2"></i>¿Cerrar el ciclo actual?</h3>
-                <p class="text-[10px] md:text-xs text-gray-700 font-medium mb-6 max-w-lg leading-relaxed">Al finalizar el mes, tu balance y el contador de cortes <b>volverán a cero</b> para iniciar un nuevo periodo contable limpio. Tu historial anterior seguirá guardado en "Todo el Historial".</p>
-                <button onclick="window.finalizarMes()" class="w-full md:w-auto border border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition-all py-3 px-8 uppercase font-bold text-[10px] md:text-xs tracking-widest shadow-sm">Finalizar Mes</button>
+            <div class="glass-panel p-8 bg-white/50">
+                <h3 class="text-xs font-bold uppercase tracking-widest mb-4 text-[#111]">Progreso Gastos Fijos</h3>
+                <div class="w-full h-6 border border-[#111] p-0.5 relative mb-2">
+                    <div id="bal-barra" class="h-full bg-[#111] transition-all duration-1000 w-0"></div>
+                    <div id="bal-porcentaje" class="absolute inset-0 flex items-center justify-center text-[10px] font-black mix-blend-difference text-white">0%</div>
+                </div>
+            </div>
+
+            <div class="mt-12 flex justify-end">
+                <button onclick="window.finalizarMes()" class="border border-red-600 text-red-600 hover:bg-red-600 hover:text-white px-6 py-3 uppercase text-[10px] font-black tracking-widest transition-colors flex items-center gap-2">
+                    <i class="ph ph-warning-circle text-lg"></i> Cierre de Caja (Finalizar Mes)
+                </button>
             </div>
         </div>
     </main>
 
     <script>
+        // Utilidades UI
         let toastTimeout;
         window.mostrarNotificacion = function(mensaje) {
             const toast = document.getElementById('global-toast');
@@ -483,91 +494,97 @@
             callbackConfirmacion = null;
         };
 
+        window.abrirModalNuevoCliente = function() {
+            document.getElementById('modal-cliente-nombre').value = document.getElementById('caja-cliente').value; 
+            document.getElementById('modal-cliente-telefono').value = '';
+            document.getElementById('modal-cliente-cumple').value = '';
+            document.getElementById('modal-nuevo-cliente').classList.add('modal-visible');
+        };
+
+        window.cerrarModalNuevoCliente = function() {
+            document.getElementById('modal-nuevo-cliente').classList.remove('modal-visible');
+        };
+
         window.actualizarEstadoNube = function(conectado) {
             const icon = document.getElementById('cloud-icon');
             const text = document.getElementById('cloud-text');
             if(conectado) {
-                icon.className = "ph ph-cloud-check text-green-600 text-sm md:text-lg transition-colors duration-300";
-                text.className = "text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-green-600 transition-colors duration-300";
+                icon.className = "ph ph-cloud-check text-green-600 text-lg transition-colors";
+                text.className = "text-[8px] font-black uppercase tracking-widest text-green-600 transition-colors";
                 text.textContent = "Online";
             } else {
-                icon.className = "ph ph-cloud-slash text-red-600 text-sm md:text-lg transition-colors duration-300";
-                text.className = "text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-red-600 transition-colors duration-300";
+                icon.className = "ph ph-cloud-slash text-red-600 text-lg transition-colors";
+                text.className = "text-[8px] font-black uppercase tracking-widest text-red-600 transition-colors";
                 text.textContent = "Local";
             }
         };
 
+        // Login Roles
         window.attemptLogin = function() {
             const passInput = document.getElementById('login-password');
             const errorMsg = document.getElementById('login-error');
-            const pass = passInput.value;
-
-            // Login exitoso si coincide alguna de las contraseñas
-            if (pass === 'bmlaprida1092' || pass === 'laprida1092') {
-                
-                // Ocultar pantalla de login
-                document.getElementById('login-screen').classList.add('hidden');
-                
-                // Determinar el rol (Admin o Empleado) y guardarlo en memoria
-                const isAdmin = (pass === 'bmlaprida1092');
-                window.currentUserRole = isAdmin ? 'admin' : 'empleado';
-                
-                // Seleccionar los botones sensibles
-                const navHistorial = document.getElementById('nav-historial');
-                const navGastos = document.getElementById('nav-gastos');
-                const navBalance = document.getElementById('nav-balance');
-
-                if (!isAdmin) {
-                    // MODO EMPLEADO: Ocultar secciones sensibles
-                    if(navHistorial) navHistorial.style.display = 'none';
-                    if(navGastos) navGastos.style.display = 'none';
-                    if(navBalance) navBalance.style.display = 'none';
-                } else {
-                    // MODO ADMIN: Asegurarse de que todo esté visible
-                    if(navHistorial) navHistorial.style.display = '';
-                    if(navGastos) navGastos.style.display = '';
-                    if(navBalance) navBalance.style.display = '';
-                }
-
-                passInput.value = ''; 
-                window.actualizarUI();
+            const pwd = passInput.value;
+            
+            if (pwd === 'BMLaprida1092') {
+                window.currentUserRole = 'admin';
+                entrar();
+            } else if (pwd === 'laprida1092') {
+                window.currentUserRole = 'empleado';
+                entrar();
             } else {
-                // Contraseña incorrecta
                 errorMsg.classList.remove('opacity-0');
                 setTimeout(() => errorMsg.classList.add('opacity-0'), 2000);
             }
+
+            function entrar() {
+                document.getElementById('login-screen').classList.add('hidden');
+                passInput.value = ''; 
+                aplicarPermisosRol();
+                window.actualizarUI();
+            }
         };
+
+        function aplicarPermisosRol() {
+            const elementosAdmin = document.querySelectorAll('.admin-only, .admin-only-view');
+            elementosAdmin.forEach(el => {
+                if(window.currentUserRole === 'empleado') {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = ''; // Restaurar
+                }
+            });
+            // Si es empleado y estaba en una vista prohibida, lo mandamos a caja
+            if(window.currentUserRole === 'empleado' && ['historial', 'gastos', 'balance'].includes(document.querySelector('.view-section:not(.hidden)').id.replace('view-', ''))) {
+                window.navigate('caja');
+            }
+        }
 
         window.navigate = function(viewName) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('btn-active'));
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
             document.getElementById(`nav-${viewName}`).classList.add('btn-active');
-            
-            if(viewName === 'contactos') window.renderContactos();
-            if(viewName === 'calendario') { window.renderCalendario(); window.renderTurnosDelDia(); }
-            
             window.actualizarUI();
         };
 
+        // CAJA
         window.updateCajaPrice = function() {
             const selectServicio = document.getElementById('caja-servicio');
             const selectMetodo = document.getElementById('caja-metodo');
             const inputMonto = document.getElementById('caja-monto');
             
-            if(!selectServicio || !selectMetodo || !inputMonto) return;
+            if(!selectServicio || !selectMetodo) return;
             
-            const tipo = selectServicio.value;
-            const metodo = selectMetodo.value;
-            
-            if (metodo === 'amigo') {
+            if (selectMetodo.value === 'amigo') {
                 inputMonto.readOnly = false;
-                inputMonto.classList.remove('text-gray-700');
+                inputMonto.value = '';
+                inputMonto.placeholder = 'Monto manual...';
                 inputMonto.focus();
             } else {
                 inputMonto.readOnly = true;
-                inputMonto.classList.add('text-gray-700');
-                inputMonto.value = window.localState.precios[tipo] || 0;
+                const tipo = selectServicio.value;
+                const precio = window.localState.precios[tipo] || 0;
+                inputMonto.value = precio;
             }
         };
 
@@ -575,14 +592,15 @@
             const tipo = document.getElementById('caja-servicio').value;
             const metodo = document.getElementById('caja-metodo').value;
             const monto = parseFloat(document.getElementById('caja-monto').value);
+            const cliente = document.getElementById('caja-cliente') ? document.getElementById('caja-cliente').value.trim() : '';
             
             if (isNaN(monto) || monto <= 0) { window.mostrarNotificacion("Revisa el monto"); return; }
 
-            // Se adjunta el "autor" a la operación para el historial
             const nuevaOperacion = { 
                 tipo: tipo, 
                 metodoPago: metodo, 
                 monto: monto, 
+                cliente: cliente,
                 timestamp: Date.now(),
                 autor: window.currentUserRole || 'admin'
             };
@@ -590,7 +608,7 @@
             if (isFirebaseActive && db) { 
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("cortes").add(nuevaOperacion);
-                    window.mostrarNotificacion("Corte Registrado (Nube)");
+                    window.mostrarNotificacion("Corte Registrado");
                 } catch (e) {
                     guardarLocalFallback(nuevaOperacion);
                     window.mostrarNotificacion("Error red. Guardado Local.");
@@ -599,15 +617,19 @@
                 guardarLocalFallback(nuevaOperacion);
                 window.mostrarNotificacion("Corte Registrado (Local)");
             }
+
+            if(document.getElementById('caja-cliente')) document.getElementById('caja-cliente').value = '';
+            if(document.getElementById('caja-metodo').value === 'amigo') document.getElementById('caja-monto').value = '';
         };
 
         function guardarLocalFallback(operacion) {
-            operacion.id = 'local_' + Date.now();
+            operacion.id = 'local_corte_' + Date.now();
             window.localState.cortes.unshift(operacion);
             window.guardarLocal();
             window.actualizarUI();
         }
 
+        // GUARDAR AJUSTES
         window.guardarPrecios = async function() {
             const pelo = parseFloat(document.getElementById('precio-pelo').value) || 0;
             const barba = parseFloat(document.getElementById('precio-barba').value) || 0;
@@ -615,12 +637,14 @@
             
             window.actualizarUI();
             
-            if (isFirebaseActive && db) { 
+            if (isFirebaseActive && db) {
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").set(window.localState.precios);
                     window.mostrarNotificacion("Precios Actualizados");
-                } catch (e) { window.guardarLocal(); }
-            } else { window.guardarLocal(); window.mostrarNotificacion("Precios Local"); }
+                } catch (e) { window.mostrarNotificacion("Guardado Localmente"); }
+            } else {
+                window.guardarLocal(); window.mostrarNotificacion("Guardado Localmente");
+            }
         };
 
         window.guardarGastos = async function() {
@@ -628,296 +652,79 @@
                 alquiler: parseFloat(document.getElementById('gasto-alquiler').value) || 0,
                 luz: parseFloat(document.getElementById('gasto-luz').value) || 0,
                 internet: parseFloat(document.getElementById('gasto-internet').value) || 0,
-                monotributo_tope: parseFloat(document.getElementById('gasto-monotributo-tope').value) || 0,
-                monotributo_mes: parseFloat(document.getElementById('gasto-monotributo-mes').value) || 0,
+                monotributo: parseFloat(document.getElementById('gasto-monotributo').value) || 0,
                 otros: parseFloat(document.getElementById('gasto-otros').value) || 0
             };
+            const tope = parseFloat(document.getElementById('tope-monotributo').value) || 0;
+            
             window.localState.gastos = gastos;
+            window.localState.tope_monotributo = tope;
             
             window.actualizarUI();
             
-            if (isFirebaseActive && db) { 
+            if (isFirebaseActive && db) {
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").set(window.localState.gastos);
-                    window.mostrarNotificacion("Gastos Actualizados");
-                } catch (e) { window.guardarLocal(); }
-            } else { window.guardarLocal(); }
+                    await db.collection("barberias").doc("bmbarber_global").collection("config").doc("tope_monotributo").set({ valor: tope });
+                    window.mostrarNotificacion("Gastos y Tope Actualizados");
+                } catch (e) { window.mostrarNotificacion("Guardado Localmente"); }
+            } else {
+                window.guardarLocal(); window.mostrarNotificacion("Guardado Localmente");
+            }
         };
 
-        window.finalizarMes = function() {
-            window.abrirConfirmacion("¿Confirmas el Cierre del Periodo? El balance volverá a $0.", async () => {
-                window.localState.inicioPeriodo = Date.now();
+        window.finalizarMes = async function() {
+            window.abrirConfirmacion("¿Cerrar Caja? El balance volverá a $0, pero el historial quedará guardado.", async () => {
+                const now = Date.now();
+                window.localState.ultimoCierre = now;
+                
                 if (isFirebaseActive && db) {
                     try {
-                        await db.collection("barberias").doc("bmbarber_global").collection("config").doc("general").set({ inicioPeriodo: window.localState.inicioPeriodo });
-                        window.mostrarNotificacion("Nuevo periodo iniciado");
-                    } catch(e) { window.guardarLocal(); }
-                } else { window.guardarLocal(); window.mostrarNotificacion("Guardado Local"); }
-                
+                        await db.collection("barberias").doc("bmbarber_global").collection("config").doc("cierre").set({ timestamp: now });
+                        window.mostrarNotificacion("Caja Cerrada Exitosamente");
+                    } catch (e) { window.mostrarNotificacion("Error al cerrar en red"); }
+                } else {
+                    window.guardarLocal();
+                    window.mostrarNotificacion("Caja Cerrada (Local)");
+                }
                 window.actualizarUI();
-                document.getElementById('view-balance').scrollIntoView({ behavior: 'smooth' });
-            });
-        }
-
-        window.guardarContacto = async function() {
-            const nombre = document.getElementById('contacto-nombre').value.trim();
-            const telefono = document.getElementById('contacto-telefono').value.trim();
-            const cumple = document.getElementById('contacto-cumple').value;
-
-            if(!nombre) { window.mostrarNotificacion("El Nombre es obligatorio"); return; }
-            const nuevoContacto = { nombre, telefono, cumple, timestamp: Date.now() };
-
-            if (isFirebaseActive && db) {
-                try {
-                    await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevoContacto);
-                    window.mostrarNotificacion("Contacto guardado en Agenda");
-                    document.getElementById('contacto-nombre').value = '';
-                    document.getElementById('contacto-telefono').value = '';
-                    document.getElementById('contacto-cumple').value = '';
-                } catch (e) { window.mostrarNotificacion("Error al guardar en nube"); }
-            } else {
-                nuevoContacto.id = 'local_contacto_' + Date.now();
-                window.localState.contactos.push(nuevoContacto);
-                window.guardarLocal();
-                window.renderContactos();
-                window.mostrarNotificacion("Contacto guardado (Local)");
-            }
-        };
-
-        window.borrarContacto = async function(id) {
-            window.abrirConfirmacion("¿Eliminar este contacto de tu agenda?", async () => {
-                if (isFirebaseActive && db) {
-                    try { await db.collection("barberias").doc("bmbarber_global").collection("contactos").doc(id).delete(); window.mostrarNotificacion("Contacto Eliminado");
-                    } catch(e) {}
-                } else {
-                    window.localState.contactos = window.localState.contactos.filter(c => c.id !== id);
-                    window.guardarLocal(); window.renderContactos(); window.mostrarNotificacion("Contacto Eliminado (Local)");
-                }
             });
         };
 
-        window.renderContactos = function() {
-            const tbody = document.getElementById('lista-contactos-body');
-            const datalist = document.getElementById('lista-nombres-contactos');
-            if(!tbody) return;
-            
-            tbody.innerHTML = ''; if(datalist) datalist.innerHTML = '';
-
-            window.localState.contactos.forEach(contacto => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-[#111]/30 hover:bg-[#111]/10 transition-colors text-[#111]';
-                
-                let cumpleText = '-';
-                if(contacto.cumple) {
-                    const parts = contacto.cumple.split('-');
-                    cumpleText = `${parts[2]}/${parts[1]}`;
-                }
-
-                let phoneHTML = '-';
-                if(contacto.telefono) {
-                    const numLimpio = contacto.telefono.replace(/\D/g, '');
-                    phoneHTML = `<a href="https://wa.me/${numLimpio}" target="_blank" class="text-green-700 font-bold hover:underline inline-flex items-center gap-1"><i class="ph ph-whatsapp"></i>${contacto.telefono}</a>`;
-                }
-
-                tr.innerHTML = `
-                    <td class="py-3 font-bold uppercase">${contacto.nombre}</td>
-                    <td class="py-3">${phoneHTML}</td>
-                    <td class="py-3 text-gray-700 font-bold">${cumpleText}</td>
-                    <td class="py-3 text-right">
-                        <button onclick="window.borrarContacto('${contacto.id}')" class="text-red-500 hover:text-red-700 transition-colors" title="Eliminar Contacto">
-                            <i class="ph ph-trash text-sm md:text-lg"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-
-                if(datalist) {
-                    const option = document.createElement('option');
-                    option.value = contacto.nombre;
-                    datalist.appendChild(option);
-                }
-            });
-
-            if(document.getElementById('contactos-contador')) {
-                document.getElementById('contactos-contador').textContent = window.localState.contactos.length;
-            }
+        const formatMoney = (amount) => {
+            return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
+        };
+        const formatearFecha = (timestamp) => {
+            const date = new Date(timestamp);
+            return date.toLocaleDateString('es-AR') + ' ' + date.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'});
+        };
+        const getNombreServicio = (id) => {
+            if(id === 'corte_pelo') return 'Corte de Pelo';
+            if(id === 'corte_barba') return 'Corte + Barba';
+            return id;
         };
 
-        let fechaActualCalendario = new Date();
-        let fechaSeleccionadaStr = "";
-
-        window.cambiarMes = function(delta) { fechaActualCalendario.setMonth(fechaActualCalendario.getMonth() + delta); window.renderCalendario(); };
-
-        window.renderCalendario = function() {
-            const grid = document.getElementById('calendario-grid');
-            const mesAnioTexto = document.getElementById('calendario-mes-anio');
-            if(!grid) return;
-
-            const mes = fechaActualCalendario.getMonth();
-            const anio = fechaActualCalendario.getFullYear();
-            const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-            mesAnioTexto.textContent = `${meses[mes]} ${anio}`;
-
-            grid.innerHTML = '';
-            
-            const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            diasSemana.forEach(d => {
-                const div = document.createElement('div');
-                div.className = 'text-center text-[9px] md:text-xs uppercase tracking-widest text-[#111] font-bold mb-2';
-                div.textContent = d;
-                grid.appendChild(div);
-            });
-
-            const primerDia = new Date(anio, mes, 1).getDay();
-            const diasEnMes = new Date(anio, mes + 1, 0).getDate();
-            const dateHoy = new Date();
-            const hoyStr = `${dateHoy.getFullYear()}-${String(dateHoy.getMonth()+1).padStart(2, '0')}-${String(dateHoy.getDate()).padStart(2, '0')}`;
-
-            for (let i = 0; i < primerDia; i++) grid.appendChild(document.createElement('div'));
-
-            for (let i = 1; i <= diasEnMes; i++) {
-                const div = document.createElement('div');
-                const fechaStr = `${anio}-${String(mes+1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                
-                div.className = 'flex flex-col items-center justify-center p-2 h-10 md:h-14 border border-[#111]/10 cursor-pointer transition-colors relative';
-                
-                if (fechaStr === hoyStr) {
-                    // Es HOY
-                    if (fechaSeleccionadaStr === fechaStr) {
-                        div.classList.add('bg-[#111]', 'text-[#E4E4E4]', 'border-2', 'border-green-600'); 
-                    } else {
-                        div.classList.add('bg-green-100', 'text-green-800', 'border', 'border-green-600'); 
-                    }
-                } else {
-                    // NO es hoy
-                    if (fechaSeleccionadaStr === fechaStr) {
-                        div.classList.add('bg-[#111]', 'text-[#E4E4E4]'); 
-                    } else {
-                        div.classList.add('hover:bg-gray-300', 'text-[#111]'); 
-                    }
-                }
-
-                div.innerHTML = `<span class="text-[10px] md:text-sm font-bold">${i}</span>`;
-                
-                const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaStr);
-                if(turnosDia.length > 0) {
-                    const indicatorColor = fechaSeleccionadaStr === fechaStr ? 'bg-[#E4E4E4]' : 'bg-green-600';
-                    div.innerHTML += `<div class="absolute bottom-1 w-1.5 h-1.5 md:w-2 md:h-2 ${indicatorColor} rounded-full shadow-sm"></div>`;
-                }
-
-                div.onclick = () => {
-                    fechaSeleccionadaStr = fechaStr;
-                    const partes = fechaStr.split('-');
-                    const txtFecha = document.getElementById('turnos-fecha-texto');
-                    txtFecha.textContent = `${partes[2]}/${partes[1]}/${partes[0]}`;
-                    txtFecha.classList.remove('text-gray-500');
-                    txtFecha.classList.add('text-green-700');
-                    window.renderCalendario();
-                    window.renderTurnosDelDia();
-                };
-                grid.appendChild(div);
-            }
-        };
-
-        window.guardarTurno = async function() {
-            if(!fechaSeleccionadaStr) { window.mostrarNotificacion("Toca un día en el calendario primero"); return; }
-            const hora = document.getElementById('turno-hora').value;
-            const cliente = document.getElementById('turno-cliente').value.trim();
-            const detalle = document.getElementById('turno-detalle').value.trim();
-            if(!hora || !cliente) { window.mostrarNotificacion("Falta completar la Hora y el Cliente"); return; }
-
-            const nuevoTurno = { fecha: fechaSeleccionadaStr, hora: hora, cliente: cliente, detalle: detalle, timestamp: Date.now() };
-
-            if (isFirebaseActive && db) {
-                try {
-                    await db.collection("barberias").doc("bmbarber_global").collection("turnos").add(nuevoTurno);
-                    window.mostrarNotificacion("Turno Agendado Correctamente");
-                    document.getElementById('turno-hora').value = '';
-                    document.getElementById('turno-cliente').value = '';
-                    document.getElementById('turno-detalle').value = '';
-                } catch (e) { window.mostrarNotificacion("Error al agendar en nube"); }
-            } else {
-                nuevoTurno.id = 'local_turno_' + Date.now();
-                window.localState.turnos.push(nuevoTurno);
-                window.guardarLocal(); window.renderCalendario(); window.renderTurnosDelDia();
-                window.mostrarNotificacion("Turno Agendado (Local)");
-                document.getElementById('turno-hora').value = ''; document.getElementById('turno-cliente').value = ''; document.getElementById('turno-detalle').value = '';
-            }
-        };
-
-        window.borrarTurno = async function(id) {
-            window.abrirConfirmacion("¿Cancelar este turno?", async () => {
-                if (isFirebaseActive && db) {
-                    try { await db.collection("barberias").doc("bmbarber_global").collection("turnos").doc(id).delete(); window.mostrarNotificacion("Turno Cancelado");
-                    } catch(e) {}
-                } else {
-                    window.localState.turnos = window.localState.turnos.filter(t => t.id !== id);
-                    window.guardarLocal(); window.renderCalendario(); window.renderTurnosDelDia(); window.mostrarNotificacion("Turno Cancelado (Local)");
-                }
-            });
-        };
-
-        window.renderTurnosDelDia = function() {
-            const lista = document.getElementById('lista-turnos');
-            if(!lista) return;
-            
-            lista.innerHTML = '';
-            const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaSeleccionadaStr).sort((a, b) => a.hora.localeCompare(b.hora));
-
-            if(turnosDia.length === 0) {
-                lista.innerHTML = '<p class="text-xs text-gray-500 uppercase tracking-widest text-center mt-4 font-bold">Sin turnos agendados</p>';
-                return;
-            }
-
-            turnosDia.forEach(turno => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between items-center bg-[#E4E4E4] border border-[#111] p-2 md:p-3 shadow-sm';
-                div.innerHTML = `
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs md:text-sm font-black text-[#111] bg-[#111]/10 px-1 rounded">${turno.hora}</span>
-                            <span class="text-xs md:text-sm font-bold uppercase tracking-wide text-[#111]">${turno.cliente}</span>
-                        </div>
-                        <div class="text-[10px] md:text-xs text-gray-600 mt-1 uppercase font-bold tracking-widest">${turno.detalle || 'Sin detalle'}</div>
-                    </div>
-                    <button onclick="window.borrarTurno('${turno.id}')" class="text-red-500 hover:text-red-700 transition-colors p-2" title="Cancelar Turno">
-                        <i class="ph ph-x-circle text-lg md:text-xl"></i>
-                    </button>
-                `;
-                lista.appendChild(div);
-            });
-        };
-
-        const formatMoney = (amount) => { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount); };
-        const formatearFecha = (timestamp) => { const date = new Date(timestamp); return date.toLocaleDateString('es-AR') + ' ' + date.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'}); };
-        const getNombreServicio = (id) => { if(id === 'corte_pelo') return 'Pelo'; if(id === 'corte_barba') return 'Pelo+Barba'; return id; };
-
+        // UI GENERAL (Balance e Historial)
         window.actualizarUI = function() {
             try {
-                // Actualizar Inputs de Ajustes
                 if(document.getElementById('precio-pelo')) document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || 0;
                 if(document.getElementById('precio-barba')) document.getElementById('precio-barba').value = window.localState.precios.corte_barba || 0;
                 if(document.getElementById('gasto-alquiler')) document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || 0;
                 if(document.getElementById('gasto-luz')) document.getElementById('gasto-luz').value = window.localState.gastos.luz || 0;
                 if(document.getElementById('gasto-internet')) document.getElementById('gasto-internet').value = window.localState.gastos.internet || 0;
-                if(document.getElementById('gasto-monotributo-tope')) document.getElementById('gasto-monotributo-tope').value = window.localState.gastos.monotributo_tope || 0;
-                if(document.getElementById('gasto-monotributo-mes')) document.getElementById('gasto-monotributo-mes').value = window.localState.gastos.monotributo_mes || 0;
+                if(document.getElementById('gasto-monotributo')) document.getElementById('gasto-monotributo').value = window.localState.gastos.monotributo || 0;
                 if(document.getElementById('gasto-otros')) document.getElementById('gasto-otros').value = window.localState.gastos.otros || 0;
+                if(document.getElementById('tope-monotributo')) document.getElementById('tope-monotributo').value = window.localState.tope_monotributo || 0;
 
                 window.updateCajaPrice();
 
-                // HISTORIAL DE CORTES Y FILTROS
-                const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'mes';
+                const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'periodo';
                 const now = new Date();
-                const inicioPeriodo = window.localState.inicioPeriodo;
+                const inicioHoy = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
                 
                 let cortesFiltrados = window.localState.cortes.filter(corte => {
-                    const fechaCorte = new Date(corte.timestamp);
-                    if (filtro === 'hoy') return fechaCorte.toDateString() === now.toDateString();
-                    if (filtro === 'mes') {
-                        if (inicioPeriodo) return corte.timestamp >= inicioPeriodo;
-                        else return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
-                    }
+                    if (filtro === 'hoy') return corte.timestamp >= inicioHoy;
+                    if (filtro === 'periodo') return corte.timestamp > window.localState.ultimoCierre;
                     return true; 
                 });
 
@@ -928,31 +735,32 @@
 
                 cortesFiltrados.forEach(corte => {
                     totalVista += corte.monto;
-                    let metodoIcon = ''; let metodoClass = '';
+                    let metodoIcon = '';
+                    if (corte.metodoPago === 'tarjeta') metodoIcon = '<i class="ph ph-credit-card text-lg" title="Tarjeta/Transferencia"></i>';
+                    else if (corte.metodoPago === 'amigo') metodoIcon = '<i class="ph ph-handshake text-lg text-blue-600" title="Precio Amigo"></i>';
+                    else metodoIcon = '<i class="ph ph-money text-lg" title="Efectivo"></i>';
                     
-                    if (corte.metodoPago === 'tarjeta') {
-                        metodoIcon = '<i class="ph ph-credit-card text-lg" title="Tarjeta/Transferencia"></i>'; metodoClass = 'text-gray-600';
-                    } else if (corte.metodoPago === 'amigo') {
-                        metodoIcon = '<i class="ph ph-handshake text-lg" title="Precio Amigo"></i>'; metodoClass = 'text-blue-600';
-                    } else {
-                        metodoIcon = '<i class="ph ph-money text-lg" title="Efectivo"></i>'; metodoClass = 'text-[#111]';
-                    }
-
-                    // Etiqueta visual para distinguir quién hizo el cobro (Auditoría)
+                    const metodoClass = corte.metodoPago === 'tarjeta' ? 'text-gray-500' : 'text-[#111]';
+                    
                     const autorTag = (corte.autor === 'empleado') 
-                        ? '<span class="ml-2 text-[8px] md:text-[9px] bg-gray-400 text-[#111] px-1.5 py-0.5 rounded font-black tracking-widest" title="Registrado por Empleado">EMP</span>'
-                        : '<span class="ml-2 text-[8px] md:text-[9px] bg-[#111] text-[#E4E4E4] px-1.5 py-0.5 rounded font-black tracking-widest" title="Registrado por Admin">ADM</span>';
+                        ? '<span class="ml-2 text-[8px] bg-gray-400 text-[#111] px-1.5 py-0.5 rounded font-black tracking-widest" title="Por Empleado">EMP</span>'
+                        : '<span class="ml-2 text-[8px] bg-[#111] text-[#E4E4E4] px-1.5 py-0.5 rounded font-black tracking-widest" title="Por Admin">ADM</span>';
+
+                    let clienteTexto = corte.cliente ? `<div class="text-[9px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">${corte.cliente}</div>` : '';
 
                     const tr = document.createElement('tr');
-                    tr.className = 'border-b border-[#111]/30 hover:bg-[#111]/10 transition-colors text-[#111] font-bold';
+                    tr.className = 'border-b border-[#111]/20 hover:bg-[#111]/5 transition-colors text-[#111] font-bold';
                     tr.innerHTML = `
                         <td class="p-3 md:p-4 text-[9px] md:text-xs">${formatearFecha(corte.timestamp)}</td>
-                        <td class="p-3 md:p-4 whitespace-nowrap">${getNombreServicio(corte.tipo)} ${autorTag}</td>
+                        <td class="p-3 md:p-4 whitespace-nowrap">
+                            <div>${getNombreServicio(corte.tipo)} ${autorTag}</div>
+                            ${clienteTexto}
+                        </td>
                         <td class="p-3 md:p-4 text-center ${metodoClass}">${metodoIcon}</td>
-                        <td class="p-3 md:p-4 text-right font-black text-[#111]">${formatMoney(corte.monto)}</td>
+                        <td class="p-3 md:p-4 text-right font-black">${formatMoney(corte.monto)}</td>
                         <td class="p-3 md:p-4 text-center">
-                            <button onclick="window.borrarRegistro('${corte.id}')" class="text-red-500 hover:text-red-700 transition-colors" title="Eliminar">
-                                <i class="ph ph-trash text-[14px] md:text-lg"></i>
+                            <button onclick="window.borrarRegistro('${corte.id}')" class="text-gray-400 hover:text-red-600 transition-colors" title="Eliminar">
+                                <i class="ph ph-trash text-lg"></i>
                             </button>
                         </td>
                     `;
@@ -961,117 +769,330 @@
 
                 if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
 
-                // ACTUALIZACIÓN DEL BALANCE GENERAL (INGRESOS, GASTOS, ESTADO, MARGEN AFIP)
-                const cortesMes = window.localState.cortes.filter(corte => {
-                    if (inicioPeriodo) return corte.timestamp >= inicioPeriodo;
-                    const fechaCorte = new Date(corte.timestamp);
-                    return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
-                });
+                // Balance Cálculo
+                const cortesPeriodo = window.localState.cortes.filter(corte => corte.timestamp > window.localState.ultimoCierre);
 
-                // Calculos de Ingresos Desglosados
-                const cantidadCortes = cortesMes.length;
-                if(document.getElementById('bal-cantidad-cortes')) document.getElementById('bal-cantidad-cortes').textContent = `${cantidadCortes} Corte${cantidadCortes !== 1 ? 's' : ''}`;
-
-                const ingresosTotales = cortesMes.reduce((acc, curr) => acc + curr.monto, 0);
-                const ingresosEfectivo = cortesMes.filter(c => c.metodoPago === 'efectivo').reduce((acc, curr) => acc + curr.monto, 0);
-                const ingresosTarjeta = cortesMes.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
-                const ingresosAmigo = cortesMes.filter(c => c.metodoPago === 'amigo').reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosTotales = cortesPeriodo.reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosEfectivo = cortesPeriodo.filter(c => c.metodoPago === 'efectivo').reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosTarjeta = cortesPeriodo.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
+                const ingresosAmigo = cortesPeriodo.filter(c => c.metodoPago === 'amigo').reduce((acc, curr) => acc + curr.monto, 0);
+                const cantidadCortes = cortesPeriodo.length;
                 
-                // Calculos de Gastos Reales (Se ignora Tope de Monotributo aquí)
-                const g = window.localState.gastos;
-                const gastosTotales = (Number(g.alquiler) || 0) + 
-                                      (Number(g.luz) || 0) + 
-                                      (Number(g.internet) || 0) + 
-                                      (Number(g.monotributo_mes) || 0) + 
-                                      (Number(g.otros) || 0);
+                const gastosFijosTotales = (window.localState.gastos.alquiler || 0) + (window.localState.gastos.luz || 0) + (window.localState.gastos.internet || 0) + (window.localState.gastos.monotributo || 0) + (window.localState.gastos.otros || 0);
+                const estado = ingresosTotales - gastosFijosTotales;
+                
+                const topeMonotributo = window.localState.tope_monotributo || 0;
+                const margenAFIP = topeMonotributo - ingresosTarjeta;
 
-                const estado = ingresosTotales - gastosTotales;
-
-                // Aplicar Ingresos en la UI
+                if(document.getElementById('bal-cortes-count')) document.getElementById('bal-cortes-count').textContent = `${cantidadCortes} Cortes`;
                 if(document.getElementById('bal-ingresos')) document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
                 if(document.getElementById('bal-ingresos-efectivo')) document.getElementById('bal-ingresos-efectivo').textContent = formatMoney(ingresosEfectivo);
                 if(document.getElementById('bal-ingresos-tarjeta')) document.getElementById('bal-ingresos-tarjeta').textContent = formatMoney(ingresosTarjeta);
                 if(document.getElementById('bal-ingresos-amigo')) document.getElementById('bal-ingresos-amigo').textContent = formatMoney(ingresosAmigo);
                 
-                // Aplicar Estado en la UI
                 const balEstado = document.getElementById('bal-estado');
                 const balLabel = document.getElementById('bal-label-estado');
                 const cajaEstado = document.getElementById('bal-caja-estado');
-                const balGastoTotal = document.getElementById('bal-gasto-total');
+                const labelGastoTotal = document.getElementById('bal-gasto-total-label');
                 
                 if(balEstado) {
                     balEstado.textContent = formatMoney(estado);
-                    if(balGastoTotal) balGastoTotal.textContent = `(Gasto Total: ${formatMoney(gastosTotales)})`;
+                    labelGastoTotal.textContent = `(Gasto Total: ${formatMoney(gastosFijosTotales)})`;
                     
                     if(estado < 0) {
-                        cajaEstado.classList.remove('bg-[#111]', 'text-[#E4E4E4]', 'border-[#111]');
-                        cajaEstado.classList.add('bg-transparent', 'text-[#111]', 'border', 'border-red-600');
-                        balLabel.classList.remove('text-[#E4E4E4]', 'text-[#111]');
-                        balLabel.classList.add('text-red-600');
+                        cajaEstado.className = "glass-panel p-6 text-center flex flex-col justify-center bg-[#111] text-[#E4E4E4]";
+                        balLabel.className = "text-[10px] uppercase tracking-widest mb-2 font-black text-gray-300";
                         balLabel.textContent = "Estado (Falta para cubrir)";
-                        balEstado.classList.add('text-red-600');
                     } else {
-                        cajaEstado.classList.remove('bg-transparent', 'text-[#111]', 'border-red-600');
-                        cajaEstado.classList.add('bg-[#111]', 'text-[#E4E4E4]', 'border-[#111]');
-                        balLabel.classList.remove('text-red-600', 'text-[#111]');
-                        balLabel.classList.add('text-[#E4E4E4]');
+                        cajaEstado.className = "glass-panel p-6 text-center flex flex-col justify-center bg-green-500 border-green-500 text-white";
+                        balLabel.className = "text-[10px] uppercase tracking-widest mb-2 font-black text-white/80";
                         balLabel.textContent = "Estado (Ganancia Libre)";
-                        balEstado.classList.remove('text-red-600');
                     }
                 }
 
-                // Aplicar Lógica del Margen AFIP (Tope - Tarjeta)
-                const topeMonotributo = Number(g.monotributo_tope) || 0;
-                const margenMonotributo = topeMonotributo - ingresosTarjeta;
-                
-                const balMargen = document.getElementById('bal-margen-monotributo');
-                const balTopeTotal = document.getElementById('bal-tope-total');
-                const cajaMonotributo = document.getElementById('bal-caja-monotributo');
-                const labelMonotributo = document.getElementById('bal-label-monotributo');
-                
-                if(balMargen) {
-                    balMargen.textContent = formatMoney(margenMonotributo);
-                    if(balTopeTotal) balTopeTotal.textContent = `(Tope: ${formatMoney(topeMonotributo)})`;
-                    
-                    if (margenMonotributo < 0) {
-                        cajaMonotributo.classList.add('border-red-600', 'bg-red-100');
-                        balMargen.classList.add('text-red-600');
-                        labelMonotributo.classList.add('text-red-600');
+                const afipEstado = document.getElementById('bal-afip');
+                const afipCaja = document.getElementById('bal-caja-afip');
+                if(afipEstado) {
+                    afipEstado.textContent = formatMoney(margenAFIP);
+                    document.getElementById('bal-tope-label').textContent = `Tope: ${formatMoney(topeMonotributo)}`;
+                    if (margenAFIP < 0) {
+                        afipCaja.className = "glass-panel p-6 text-center flex flex-col justify-center bg-red-600 border-red-600 text-white";
+                        document.getElementById('bal-label-afip').className = "text-[10px] uppercase tracking-widest mb-2 font-black text-white/80";
+                        afipEstado.className = "text-3xl font-black mb-2 text-white";
+                        document.getElementById('bal-tope-label').className = "text-[9px] uppercase tracking-widest font-bold text-white/70";
                     } else {
-                        cajaMonotributo.classList.remove('border-red-600', 'bg-red-100');
-                        balMargen.classList.remove('text-red-600');
-                        labelMonotributo.classList.remove('text-red-600');
+                        afipCaja.className = "glass-panel p-6 text-center flex flex-col justify-center bg-white/50 border-[#111]";
+                        document.getElementById('bal-label-afip').className = "text-[10px] uppercase tracking-widest mb-2 font-black text-gray-700";
+                        afipEstado.className = "text-3xl font-black mb-2 text-[#111]";
+                        document.getElementById('bal-tope-label').className = "text-[9px] uppercase tracking-widest font-bold text-gray-500";
                     }
                 }
 
-                // Barra de Progreso y Mensaje
                 let porcentaje = 0;
-                if (gastosTotales > 0) porcentaje = (ingresosTotales / gastosTotales) * 100;
+                if (gastosFijosTotales > 0) porcentaje = (ingresosTotales / gastosFijosTotales) * 100;
                 else if (ingresosTotales > 0) porcentaje = 100;
                 
                 porcentaje = Math.min(Math.round(porcentaje), 100);
                 if(document.getElementById('bal-barra')) document.getElementById('bal-barra').style.width = `${porcentaje}%`;
                 if(document.getElementById('bal-porcentaje')) document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
 
-                const mensajeEl = document.getElementById('bal-mensaje');
-                if(mensajeEl) {
-                    if (estado >= 0) { mensajeEl.textContent = "¡Gastos fijos cubiertos! Ya estás generando ganancias."; } 
-                    else { mensajeEl.textContent = `Faltan ${formatMoney(Math.abs(estado))} para cubrir los gastos del mes.`; }
-                }
-
-            } catch(e) {}
+            } catch(e) { console.error("Error UI:", e); }
         };
 
         window.borrarRegistro = async function(id) {
-            window.abrirConfirmacion("¿Seguro que deseas eliminar este registro?", async () => {
+            window.abrirConfirmacion("¿Eliminar registro?", async () => {
                 if (isFirebaseActive && db) {
-                    try { await db.collection("barberias").doc("bmbarber_global").collection("cortes").doc(id).delete(); window.mostrarNotificacion("Corte Eliminado (Nube)");
-                    } catch (e) { window.mostrarNotificacion("Error al borrar en la nube."); }
+                    try {
+                        await db.collection("barberias").doc("bmbarber_global").collection("cortes").doc(id).delete();
+                        window.mostrarNotificacion("Eliminado");
+                    } catch (e) { window.mostrarNotificacion("Error red."); }
                 } else {
                     window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
-                    window.guardarLocal(); window.actualizarUI(); window.mostrarNotificacion("Corte Eliminado (Local)");
+                    window.guardarLocal();
+                    window.actualizarUI();
+                    window.mostrarNotificacion("Eliminado (Local)");
                 }
             });
+        };
+
+        window.guardarContactoDesdeModal = async function() {
+            const nombre = document.getElementById('modal-cliente-nombre').value.trim();
+            const telefono = document.getElementById('modal-cliente-telefono').value.trim();
+            const cumple = document.getElementById('modal-cliente-cumple').value;
+
+            if(!nombre) { window.mostrarNotificacion("Nombre obligatorio"); return; }
+            
+            const nuevo = { nombre, telefono, cumple, timestamp: Date.now() };
+
+            if (isFirebaseActive && db) {
+                try {
+                    await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevo);
+                    window.mostrarNotificacion("Agendado");
+                } catch (e) { console.error(e); }
+            } else {
+                nuevo.id = 'local_ctc_' + Date.now();
+                window.localState.contactos.push(nuevo);
+                window.guardarLocal(); window.renderContactos();
+            }
+            
+            document.getElementById('caja-cliente').value = nombre;
+            window.cerrarModalNuevoCliente();
+        };
+
+        window.guardarContacto = async function() {
+            const nombre = document.getElementById('contacto-nombre').value.trim();
+            const telefono = document.getElementById('contacto-telefono').value.trim();
+            const cumple = document.getElementById('contacto-cumple').value;
+
+            if(!nombre) { window.mostrarNotificacion("Nombre obligatorio"); return; }
+            
+            const nuevo = { nombre, telefono, cumple, timestamp: Date.now() };
+
+            if (isFirebaseActive && db) {
+                try {
+                    await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevo);
+                    window.mostrarNotificacion("Contacto Guardado");
+                } catch (e) { window.mostrarNotificacion("Error red"); }
+            } else {
+                nuevo.id = 'local_ctc_' + Date.now();
+                window.localState.contactos.push(nuevo);
+                window.guardarLocal();
+                window.renderContactos();
+                window.mostrarNotificacion("Contacto Guardado (Local)");
+            }
+
+            document.getElementById('contacto-nombre').value = '';
+            document.getElementById('contacto-telefono').value = '';
+            document.getElementById('contacto-cumple').value = '';
+        };
+
+        window.renderContactos = function() {
+            const datalist = document.getElementById('lista-nombres-contactos');
+            const lista = document.getElementById('lista-contactos');
+            const search = (document.getElementById('buscar-contacto')?.value || '').toLowerCase();
+            
+            if(datalist) datalist.innerHTML = '';
+            if(lista) lista.innerHTML = '';
+
+            // Llenar datalist (autocompletar)
+            window.localState.contactos.forEach(c => {
+                if(datalist) {
+                    const opt = document.createElement('option');
+                    opt.value = c.nombre;
+                    datalist.appendChild(opt);
+                }
+            });
+
+            // Llenar lista visual
+            if(!lista) return;
+            const filtrados = window.localState.contactos.filter(c => c.nombre.toLowerCase().includes(search) || c.telefono.includes(search));
+            filtrados.sort((a,b) => a.nombre.localeCompare(b.nombre));
+
+            filtrados.forEach(c => {
+                let wpLink = c.telefono ? `https://wa.me/549${c.telefono.replace(/\D/g,'')}` : '#';
+                let btnWp = c.telefono ? `<a href="${wpLink}" target="_blank" class="bg-green-500 text-white p-2 hover:bg-green-600 transition-colors flex items-center justify-center"><i class="ph ph-whatsapp text-lg"></i></a>` : '';
+                
+                const div = document.createElement('div');
+                div.className = "bg-white/50 border border-[#111]/20 p-4 flex justify-between items-center";
+                div.innerHTML = `
+                    <div class="overflow-hidden">
+                        <p class="text-xs font-black uppercase tracking-widest text-[#111] truncate">${c.nombre}</p>
+                        <p class="text-[10px] font-bold text-gray-500">${c.telefono || 'Sin teléfono'} | Cumple: ${c.cumple ? c.cumple.split('-').reverse().join('/') : '--/--/----'}</p>
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        ${btnWp}
+                        <button onclick="borrarContacto('${c.id}')" class="bg-gray-300 text-[#111] p-2 hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center"><i class="ph ph-trash text-lg"></i></button>
+                    </div>
+                `;
+                lista.appendChild(div);
+            });
+        };
+
+        window.borrarContacto = async function(id) {
+            window.abrirConfirmacion("¿Borrar contacto?", async () => {
+                if (isFirebaseActive && db) {
+                    try { await db.collection("barberias").doc("bmbarber_global").collection("contactos").doc(id).delete(); } catch(e){}
+                } else {
+                    window.localState.contactos = window.localState.contactos.filter(c => c.id !== id);
+                    window.guardarLocal(); window.renderContactos();
+                }
+            });
+        };
+
+        let calDate = new Date();
+        let selectedDate = new Date();
+
+        window.cambiarMes = function(delta) {
+            calDate.setMonth(calDate.getMonth() + delta);
+            renderCalendario();
+        };
+
+        window.seleccionarDia = function(y, m, d) {
+            selectedDate = new Date(y, m, d);
+            renderCalendario();
+        };
+
+        window.renderCalendario = function() {
+            const container = document.getElementById('dias-calendario');
+            const mesLabel = document.getElementById('mes-actual');
+            const tituloAgenda = document.getElementById('titulo-agenda-dia');
+            if(!container) return;
+
+            const year = calDate.getFullYear();
+            const month = calDate.getMonth();
+            const today = new Date();
+
+            const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            mesLabel.textContent = `${meses[month]} ${year}`;
+            tituloAgenda.textContent = `Turnos del ${selectedDate.getDate()} de ${meses[selectedDate.getMonth()]}`;
+
+            container.innerHTML = '';
+            
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            for (let i = 0; i < firstDay; i++) {
+                container.appendChild(document.createElement('div'));
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const div = document.createElement('div');
+                div.className = "py-2 dia-calendario relative border border-transparent";
+                div.textContent = day;
+                div.onclick = () => seleccionarDia(year, month, day);
+
+                const isToday = (day === today.getDate() && month === today.getMonth() && year === today.getFullYear());
+                const isSelected = (day === selectedDate.getDate() && month === selectedDate.getMonth() && year === selectedDate.getFullYear());
+
+                if (isToday) div.classList.add('dia-hoy');
+                if (isSelected) div.classList.add('dia-seleccionado');
+
+                // Puntito si hay turnos
+                const fechaStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaStr);
+                if (turnosDia.length > 0) {
+                    const dot = document.createElement('span');
+                    dot.className = "absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-[#111] rounded-full";
+                    if(isSelected) dot.classList.replace('bg-[#111]', 'bg-[#E4E4E4]');
+                    if(isToday && !isSelected) dot.classList.replace('bg-[#111]', 'bg-green-500');
+                    div.appendChild(dot);
+                }
+
+                container.appendChild(div);
+            }
+            renderTurnosDia();
+        };
+
+        window.guardarTurno = async function() {
+            const hora = document.getElementById('turno-hora').value;
+            const cliente = document.getElementById('turno-cliente').value.trim();
+            const servicio = document.getElementById('turno-servicio').value.trim();
+            
+            if(!hora || !cliente) { window.mostrarNotificacion("Hora y Cliente obligatorios"); return; }
+
+            const y = selectedDate.getFullYear();
+            const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+            const d = String(selectedDate.getDate()).padStart(2, '0');
+            const fechaStr = `${y}-${m}-${d}`;
+
+            const nuevoTurno = { fecha: fechaStr, hora, cliente, servicio, timestamp: Date.now() };
+
+            if (isFirebaseActive && db) {
+                try {
+                    await db.collection("barberias").doc("bmbarber_global").collection("turnos").add(nuevoTurno);
+                    window.mostrarNotificacion("Turno Agendado");
+                } catch(e) { window.mostrarNotificacion("Error red"); }
+            } else {
+                nuevoTurno.id = 'local_tno_' + Date.now();
+                window.localState.turnos.push(nuevoTurno);
+                window.guardarLocal(); window.renderCalendario();
+            }
+
+            document.getElementById('turno-hora').value = '';
+            document.getElementById('turno-cliente').value = '';
+            document.getElementById('turno-servicio').value = '';
+        };
+
+        window.renderTurnosDia = function() {
+            const container = document.getElementById('lista-turnos-dia');
+            if(!container) return;
+            container.innerHTML = '';
+
+            const y = selectedDate.getFullYear();
+            const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+            const d = String(selectedDate.getDate()).padStart(2, '0');
+            const fechaStr = `${y}-${m}-${d}`;
+
+            const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaStr);
+            turnosDia.sort((a,b) => a.hora.localeCompare(b.hora));
+
+            if(turnosDia.length === 0) {
+                container.innerHTML = '<p class="text-xs text-gray-500 text-center font-bold italic mt-4">Sin turnos para este día.</p>';
+                return;
+            }
+
+            turnosDia.forEach(t => {
+                const div = document.createElement('div');
+                div.className = "bg-white border border-[#111]/20 p-3 flex justify-between items-center shadow-sm";
+                div.innerHTML = `
+                    <div>
+                        <span class="text-sm font-black bg-[#111] text-[#E4E4E4] px-2 py-0.5 mr-2">${t.hora}</span>
+                        <span class="text-xs font-black uppercase tracking-widest text-[#111]">${t.cliente}</span>
+                        <div class="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-1">${t.servicio || '-'}</div>
+                    </div>
+                    <button onclick="borrarTurno('${t.id}')" class="text-gray-400 hover:text-red-600 transition-colors p-2"><i class="ph ph-x-circle text-xl"></i></button>
+                `;
+                container.appendChild(div);
+            });
+        };
+
+        window.borrarTurno = async function(id) {
+            if (isFirebaseActive && db) {
+                try { await db.collection("barberias").doc("bmbarber_global").collection("turnos").doc(id).delete(); } catch(e){}
+            } else {
+                window.localState.turnos = window.localState.turnos.filter(t => t.id !== id);
+                window.guardarLocal(); window.renderCalendario();
+            }
         };
 
     </script>
