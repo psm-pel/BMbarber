@@ -2,13 +2,14 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Panel de Control - BMbarber</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -17,7 +18,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #E4E4E4; color: #111111; }
         
-        /* Estilo Silver/Black */
+        /* Estilo Silver/Black Premium */
         .glass-panel { background: #E4E4E4; border: 1px solid #111111; box-shadow: 4px 4px 0px 0px rgba(17,17,17,0.1); }
         .btn-active { background: #111111 !important; color: #E4E4E4 !important; }
         input, select { background: #E4E4E4 !important; border: 1px solid #111111 !important; color: #111111 !important; }
@@ -33,8 +34,8 @@
 
         .dia-calendario { cursor: pointer; transition: all 0.2s; }
         .dia-calendario:hover { background-color: #111111; color: #E4E4E4; }
-        .dia-hoy { border: 2px solid #22c55e !important; color: #22c55e; font-weight: 900; }
-        .dia-seleccionado { background-color: #111111; color: #E4E4E4; }
+        .dia-hoy { border: 2px solid #22c55e !important; color: #22c55e !important; font-weight: 900; }
+        .dia-seleccionado { background-color: #111111; color: #E4E4E4 !important; }
     </style>
     
     <script>
@@ -51,7 +52,6 @@
         let app, db, auth;
         let isFirebaseActive = false;
         window.currentUserRole = 'empleado'; // admin | empleado
-        window.fechaFiltro = Date.now();
         
         window.localState = {
             cortes: [],
@@ -66,6 +66,8 @@
         window.addEventListener('DOMContentLoaded', () => {
             initApp();
             renderCalendario();
+            window.configurarAutocompletado('caja-cliente', 'sugerencias-caja');
+            window.configurarAutocompletado('turno-cliente', 'sugerencias-turno');
         });
 
         async function initApp() {
@@ -98,7 +100,6 @@
         async function cargarDatosInicialesFirebase() {
             if(!db) return;
             try {
-                // Siempre lee de bmbarber_global
                 const docPrecios = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").get();
                 if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
                 
@@ -111,7 +112,6 @@
                 const docCierre = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("cierre").get();
                 if(docCierre.exists) { window.localState.ultimoCierre = docCierre.data().timestamp || 0; }
 
-                // Escuchar Cortes
                 db.collection("barberias").doc("bmbarber_global").collection("cortes")
                 .orderBy("timestamp", "desc").onSnapshot((snapshot) => {
                     window.localState.cortes = [];
@@ -119,7 +119,6 @@
                     window.actualizarUI();
                 });
 
-                // Escuchar Contactos
                 db.collection("barberias").doc("bmbarber_global").collection("contactos")
                 .onSnapshot((snapshot) => {
                     window.localState.contactos = [];
@@ -127,14 +126,12 @@
                     window.renderContactos();
                 });
 
-                // Escuchar Turnos
                 db.collection("barberias").doc("bmbarber_global").collection("turnos")
                 .onSnapshot((snapshot) => {
                     window.localState.turnos = [];
                     snapshot.forEach((doc) => { window.localState.turnos.push({ id: doc.id, ...doc.data() }); });
                     window.renderCalendario();
                 });
-
             } catch(e) {
                 console.error("Error Firebase:", e);
                 cargarDatosInicialesLocal();
@@ -145,7 +142,7 @@
             try {
                 const guardado = localStorage.getItem('bmbarber_global_data');
                 if(guardado) { window.localState = JSON.parse(guardado); }
-            } catch(e) { console.error("Error local:", e); }
+            } catch(e) {}
             window.actualizarUI();
             window.renderContactos();
             window.renderCalendario();
@@ -158,9 +155,6 @@
     </script>
 </head>
 <body class="h-screen flex overflow-hidden relative">
-
-    <!-- Datalist para autocompletar clientes -->
-    <datalist id="lista-nombres-contactos"></datalist>
 
     <!-- Notificación Toast -->
     <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-[#111] text-[#E4E4E4] px-6 py-3 text-[10px] font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-xl pointer-events-none border border-[#E4E4E4]">
@@ -270,8 +264,11 @@
 
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Cliente (Opcional)</label>
                 <div class="flex gap-2 mb-6">
-                    <input type="text" id="caja-cliente" placeholder="Nombre..." list="lista-nombres-contactos" class="flex-1 p-4 outline-none text-sm uppercase font-bold focus:ring-2 focus:ring-[#111]">
-                    <button onclick="window.abrirModalNuevoCliente()" class="px-5 border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black transition-colors flex items-center justify-center" title="Añadir Cliente Nuevo">
+                    <div class="relative flex-1">
+                        <input type="text" id="caja-cliente" placeholder="Nombre..." autocomplete="off" class="w-full p-4 outline-none text-sm uppercase font-bold focus:ring-2 focus:ring-[#111]">
+                        <div id="sugerencias-caja" class="absolute left-0 right-0 top-full mt-1 bg-[#E4E4E4] border border-[#111] shadow-lg z-[60] hidden max-h-48 overflow-y-auto"></div>
+                    </div>
+                    <button onclick="window.abrirModalNuevoCliente(document.getElementById('caja-cliente').value)" class="px-5 border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black transition-colors flex items-center justify-center" title="Añadir Cliente Nuevo">
                         <i class="ph ph-user-plus text-xl"></i>
                     </button>
                 </div>
@@ -310,20 +307,23 @@
                         <h4 class="text-[10px] uppercase tracking-widest mb-3 font-bold text-gray-600">Nuevo Turno</h4>
                         <div class="flex gap-2 mb-3">
                             <input type="time" id="turno-hora" class="p-2 outline-none text-xs border border-[#111]/30 font-bold w-24">
-                            <input type="text" id="turno-cliente" placeholder="Cliente..." list="lista-nombres-contactos" class="flex-1 p-2 outline-none text-xs uppercase border border-[#111]/30 font-bold">
+                            <div class="relative flex-1">
+                                <input type="text" id="turno-cliente" placeholder="Cliente..." autocomplete="off" class="w-full p-2 outline-none text-xs uppercase border border-[#111]/30 font-bold">
+                                <div id="sugerencias-turno" class="absolute left-0 right-0 top-full mt-1 bg-[#E4E4E4] border border-[#111] shadow-lg z-[60] hidden max-h-48 overflow-y-auto"></div>
+                            </div>
                         </div>
                         <input type="text" id="turno-servicio" placeholder="Detalle (Ej: Corte + Barba)" class="w-full p-2 mb-3 outline-none text-xs uppercase border border-[#111]/30 font-bold">
                         <button onclick="guardarTurno()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-2 uppercase text-[10px] font-bold tracking-widest transition-colors">Agendar</button>
                     </div>
 
                     <div id="lista-turnos-dia" class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                        <!-- Turnos del día generados por JS -->
+                        <!-- Turnos del día -->
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- VISTA AGENDA (CONTACTOS) -->
+        <!-- VISTA AGENDA -->
         <div id="view-agenda" class="view-section hidden max-w-4xl mx-auto">
             <h2 class="text-3xl md:text-4xl font-black mb-8 tracking-tighter uppercase text-[#111]">Agenda de Clientes</h2>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -399,7 +399,7 @@
                 </div>
                 <div class="glass-panel p-6 bg-white/50">
                     <h3 class="text-sm font-black uppercase tracking-widest mb-6 border-b border-[#111] pb-2 text-[#111]">Gastos Fijos y AFIP</h3>
-                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Tope Monotributo Mensual (ARS)</label>
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Tope Monotributo (ARS)</label>
                     <input type="number" id="tope-monotributo" class="w-full p-3 mb-4 outline-none font-bold bg-white" placeholder="Límite facturación mensual">
                     
                     <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700 mt-4 border-t border-[#111]/20 pt-4">Alquiler (ARS)</label>
@@ -408,9 +408,9 @@
                     <input type="number" id="gasto-luz" class="w-full p-3 mb-4 outline-none font-bold">
                     <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Internet / WiFi (ARS)</label>
                     <input type="number" id="gasto-internet" class="w-full p-3 mb-4 outline-none font-bold">
-                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Monotributo MES (Costo a pagar)</label>
-                    <input type="number" id="gasto-monotributo" class="w-full p-3 mb-4 outline-none font-bold" placeholder="Cuota mensual AFIP">
-                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Otros (Insumos, etc.)</label>
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Monotributo Mes (ARS)</label>
+                    <input type="number" id="gasto-monotributo" class="w-full p-3 mb-4 outline-none font-bold" placeholder="Costo a pagar">
+                    <label class="block text-[10px] uppercase tracking-widest mb-2 font-bold text-gray-700">Otros (Insumos, limpieza...)</label>
                     <input type="number" id="gasto-otros" class="w-full p-3 mb-6 outline-none font-bold">
                     <button onclick="window.guardarGastos()" class="w-full bg-[#111] text-[#E4E4E4] hover:bg-black py-3 uppercase text-[10px] font-bold tracking-widest transition-all">Actualizar Gastos</button>
                 </div>
@@ -425,7 +425,6 @@
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <!-- Ingresos -->
                 <div class="glass-panel p-6 text-center bg-white/50">
                     <div class="flex justify-center items-center gap-2 mb-3">
                         <p class="text-xs uppercase tracking-widest font-bold text-gray-700">Ingresos</p>
@@ -439,14 +438,12 @@
                     </div>
                 </div>
 
-                <!-- Estado (Ganancia Real) -->
                 <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-estado">
                     <p class="text-[10px] uppercase tracking-widest mb-2 font-black" id="bal-label-estado">Estado (Falta para cubrir)</p>
                     <p id="bal-estado" class="text-3xl font-black mb-2">$0</p>
                     <p class="text-[9px] uppercase tracking-widest font-bold opacity-70" id="bal-gasto-total-label">(Gasto Total: $0)</p>
                 </div>
 
-                <!-- Margen AFIP (Blanco) -->
                 <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center bg-white/50 border-[#111]" id="bal-caja-afip">
                     <p class="text-[10px] uppercase tracking-widest mb-2 font-black text-gray-700" id="bal-label-afip">Margen AFIP (Blanco)</p>
                     <p id="bal-afip" class="text-3xl font-black mb-2 text-[#111]">$0</p>
@@ -494,8 +491,11 @@
             callbackConfirmacion = null;
         };
 
-        window.abrirModalNuevoCliente = function() {
-            document.getElementById('modal-cliente-nombre').value = document.getElementById('caja-cliente').value; 
+        window.abrirModalNuevoCliente = function(nombre = '') {
+            let valorInput = nombre;
+            if(!valorInput && document.getElementById('caja-cliente')) valorInput = document.getElementById('caja-cliente').value;
+            
+            document.getElementById('modal-cliente-nombre').value = valorInput;
             document.getElementById('modal-cliente-telefono').value = '';
             document.getElementById('modal-cliente-cumple').value = '';
             document.getElementById('modal-nuevo-cliente').classList.add('modal-visible');
@@ -519,7 +519,6 @@
             }
         };
 
-        // Login Roles
         window.attemptLogin = function() {
             const passInput = document.getElementById('login-password');
             const errorMsg = document.getElementById('login-error');
@@ -547,13 +546,9 @@
         function aplicarPermisosRol() {
             const elementosAdmin = document.querySelectorAll('.admin-only, .admin-only-view');
             elementosAdmin.forEach(el => {
-                if(window.currentUserRole === 'empleado') {
-                    el.style.display = 'none';
-                } else {
-                    el.style.display = ''; // Restaurar
-                }
+                if(window.currentUserRole === 'empleado') el.style.display = 'none';
+                else el.style.display = '';
             });
-            // Si es empleado y estaba en una vista prohibida, lo mandamos a caja
             if(window.currentUserRole === 'empleado' && ['historial', 'gastos', 'balance'].includes(document.querySelector('.view-section:not(.hidden)').id.replace('view-', ''))) {
                 window.navigate('caja');
             }
@@ -567,7 +562,48 @@
             window.actualizarUI();
         };
 
-        // CAJA
+        window.configurarAutocompletado = function(inputId, sugerenciasId) {
+            const input = document.getElementById(inputId);
+            const sugerencias = document.getElementById(sugerenciasId);
+            if(!input || !sugerencias) return;
+
+            input.addEventListener('input', function() {
+                const val = this.value.toLowerCase().trim();
+                sugerencias.innerHTML = '';
+                if (!val) {
+                    sugerencias.classList.add('hidden');
+                    return;
+                }
+                const filtrados = window.localState.contactos.filter(c => c.nombre.toLowerCase().includes(val));
+                if (filtrados.length > 0) {
+                    filtrados.forEach(c => {
+                        const div = document.createElement('div');
+                        div.className = "p-3 border-b border-[#111]/10 text-xs font-bold uppercase cursor-pointer hover:bg-gray-300 text-[#111] transition-colors";
+                        div.textContent = c.nombre;
+                        div.onmousedown = function(e) { 
+                            e.preventDefault(); 
+                            input.value = c.nombre;
+                            sugerencias.classList.add('hidden');
+                        };
+                        sugerencias.appendChild(div);
+                    });
+                } else {
+                    const div = document.createElement('div');
+                    div.className = "p-3 text-[10px] uppercase text-gray-600 font-bold bg-white flex justify-between items-center";
+                    div.innerHTML = `<span>No existe</span> <button type="button" class="bg-[#111] text-[#E4E4E4] px-3 py-1.5 rounded-sm hover:bg-black transition-colors" onmousedown="event.preventDefault(); window.abrirModalNuevoCliente('${val}');">Crear</button>`;
+                    sugerencias.appendChild(div);
+                }
+                sugerencias.classList.remove('hidden');
+            });
+
+            input.addEventListener('blur', function() {
+                setTimeout(() => sugerencias.classList.add('hidden'), 150);
+            });
+            input.addEventListener('focus', function() {
+                if(this.value.trim() !== '') this.dispatchEvent(new Event('input'));
+            });
+        };
+
         window.updateCajaPrice = function() {
             const selectServicio = document.getElementById('caja-servicio');
             const selectMetodo = document.getElementById('caja-metodo');
@@ -629,22 +665,15 @@
             window.actualizarUI();
         }
 
-        // GUARDAR AJUSTES
         window.guardarPrecios = async function() {
             const pelo = parseFloat(document.getElementById('precio-pelo').value) || 0;
             const barba = parseFloat(document.getElementById('precio-barba').value) || 0;
             window.localState.precios = { "corte_pelo": pelo, "corte_barba": barba };
-            
             window.actualizarUI();
-            
             if (isFirebaseActive && db) {
-                try {
-                    await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").set(window.localState.precios);
-                    window.mostrarNotificacion("Precios Actualizados");
+                try { await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").set(window.localState.precios); window.mostrarNotificacion("Precios Actualizados");
                 } catch (e) { window.mostrarNotificacion("Guardado Localmente"); }
-            } else {
-                window.guardarLocal(); window.mostrarNotificacion("Guardado Localmente");
-            }
+            } else { window.guardarLocal(); window.mostrarNotificacion("Guardado Localmente"); }
         };
 
         window.guardarGastos = async function() {
@@ -656,55 +685,35 @@
                 otros: parseFloat(document.getElementById('gasto-otros').value) || 0
             };
             const tope = parseFloat(document.getElementById('tope-monotributo').value) || 0;
-            
-            window.localState.gastos = gastos;
-            window.localState.tope_monotributo = tope;
-            
-            window.actualizarUI();
-            
+            window.localState.gastos = gastos; window.localState.tope_monotributo = tope; window.actualizarUI();
             if (isFirebaseActive && db) {
                 try {
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("gastos").set(window.localState.gastos);
                     await db.collection("barberias").doc("bmbarber_global").collection("config").doc("tope_monotributo").set({ valor: tope });
                     window.mostrarNotificacion("Gastos y Tope Actualizados");
                 } catch (e) { window.mostrarNotificacion("Guardado Localmente"); }
-            } else {
-                window.guardarLocal(); window.mostrarNotificacion("Guardado Localmente");
-            }
+            } else { window.guardarLocal(); window.mostrarNotificacion("Guardado Localmente"); }
         };
 
         window.finalizarMes = async function() {
             window.abrirConfirmacion("¿Cerrar Caja? El balance volverá a $0, pero el historial quedará guardado.", async () => {
                 const now = Date.now();
                 window.localState.ultimoCierre = now;
-                
                 if (isFirebaseActive && db) {
-                    try {
-                        await db.collection("barberias").doc("bmbarber_global").collection("config").doc("cierre").set({ timestamp: now });
-                        window.mostrarNotificacion("Caja Cerrada Exitosamente");
+                    try { await db.collection("barberias").doc("bmbarber_global").collection("config").doc("cierre").set({ timestamp: now }); window.mostrarNotificacion("Caja Cerrada Exitosamente");
                     } catch (e) { window.mostrarNotificacion("Error al cerrar en red"); }
-                } else {
-                    window.guardarLocal();
-                    window.mostrarNotificacion("Caja Cerrada (Local)");
-                }
+                } else { window.guardarLocal(); window.mostrarNotificacion("Caja Cerrada (Local)"); }
                 window.actualizarUI();
             });
         };
 
-        const formatMoney = (amount) => {
-            return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
-        };
+        const formatMoney = (amount) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
         const formatearFecha = (timestamp) => {
             const date = new Date(timestamp);
             return date.toLocaleDateString('es-AR') + ' ' + date.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'});
         };
-        const getNombreServicio = (id) => {
-            if(id === 'corte_pelo') return 'Corte de Pelo';
-            if(id === 'corte_barba') return 'Corte + Barba';
-            return id;
-        };
+        const getNombreServicio = (id) => (id === 'corte_pelo') ? 'Corte de Pelo' : (id === 'corte_barba' ? 'Corte + Barba' : id);
 
-        // UI GENERAL (Balance e Historial)
         window.actualizarUI = function() {
             try {
                 if(document.getElementById('precio-pelo')) document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || 0;
@@ -771,7 +780,6 @@
 
                 // Balance Cálculo
                 const cortesPeriodo = window.localState.cortes.filter(corte => corte.timestamp > window.localState.ultimoCierre);
-
                 const ingresosTotales = cortesPeriodo.reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosEfectivo = cortesPeriodo.filter(c => c.metodoPago === 'efectivo').reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosTarjeta = cortesPeriodo.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
@@ -780,7 +788,6 @@
                 
                 const gastosFijosTotales = (window.localState.gastos.alquiler || 0) + (window.localState.gastos.luz || 0) + (window.localState.gastos.internet || 0) + (window.localState.gastos.monotributo || 0) + (window.localState.gastos.otros || 0);
                 const estado = ingresosTotales - gastosFijosTotales;
-                
                 const topeMonotributo = window.localState.tope_monotributo || 0;
                 const margenAFIP = topeMonotributo - ingresosTarjeta;
 
@@ -798,7 +805,6 @@
                 if(balEstado) {
                     balEstado.textContent = formatMoney(estado);
                     labelGastoTotal.textContent = `(Gasto Total: ${formatMoney(gastosFijosTotales)})`;
-                    
                     if(estado < 0) {
                         cajaEstado.className = "glass-panel p-6 text-center flex flex-col justify-center bg-[#111] text-[#E4E4E4]";
                         balLabel.className = "text-[10px] uppercase tracking-widest mb-2 font-black text-gray-300";
@@ -828,10 +834,7 @@
                     }
                 }
 
-                let porcentaje = 0;
-                if (gastosFijosTotales > 0) porcentaje = (ingresosTotales / gastosFijosTotales) * 100;
-                else if (ingresosTotales > 0) porcentaje = 100;
-                
+                let porcentaje = (gastosFijosTotales > 0) ? (ingresosTotales / gastosFijosTotales) * 100 : ((ingresosTotales > 0) ? 100 : 0);
                 porcentaje = Math.min(Math.round(porcentaje), 100);
                 if(document.getElementById('bal-barra')) document.getElementById('bal-barra').style.width = `${porcentaje}%`;
                 if(document.getElementById('bal-porcentaje')) document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
@@ -842,15 +845,10 @@
         window.borrarRegistro = async function(id) {
             window.abrirConfirmacion("¿Eliminar registro?", async () => {
                 if (isFirebaseActive && db) {
-                    try {
-                        await db.collection("barberias").doc("bmbarber_global").collection("cortes").doc(id).delete();
-                        window.mostrarNotificacion("Eliminado");
+                    try { await db.collection("barberias").doc("bmbarber_global").collection("cortes").doc(id).delete(); window.mostrarNotificacion("Eliminado");
                     } catch (e) { window.mostrarNotificacion("Error red."); }
                 } else {
-                    window.localState.cortes = window.localState.cortes.filter(c => c.id !== id);
-                    window.guardarLocal();
-                    window.actualizarUI();
-                    window.mostrarNotificacion("Eliminado (Local)");
+                    window.localState.cortes = window.localState.cortes.filter(c => c.id !== id); window.guardarLocal(); window.actualizarUI(); window.mostrarNotificacion("Eliminado (Local)");
                 }
             });
         };
@@ -861,21 +859,17 @@
             const cumple = document.getElementById('modal-cliente-cumple').value;
 
             if(!nombre) { window.mostrarNotificacion("Nombre obligatorio"); return; }
-            
             const nuevo = { nombre, telefono, cumple, timestamp: Date.now() };
 
             if (isFirebaseActive && db) {
-                try {
-                    await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevo);
-                    window.mostrarNotificacion("Agendado");
-                } catch (e) { console.error(e); }
+                try { await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevo); window.mostrarNotificacion("Agendado");
+                } catch (e) {}
             } else {
-                nuevo.id = 'local_ctc_' + Date.now();
-                window.localState.contactos.push(nuevo);
-                window.guardarLocal(); window.renderContactos();
+                nuevo.id = 'local_ctc_' + Date.now(); window.localState.contactos.push(nuevo); window.guardarLocal(); window.renderContactos();
             }
             
-            document.getElementById('caja-cliente').value = nombre;
+            if(document.getElementById('caja-cliente')) document.getElementById('caja-cliente').value = nombre;
+            if(document.getElementById('turno-cliente')) document.getElementById('turno-cliente').value = nombre;
             window.cerrarModalNuevoCliente();
         };
 
@@ -885,46 +879,21 @@
             const cumple = document.getElementById('contacto-cumple').value;
 
             if(!nombre) { window.mostrarNotificacion("Nombre obligatorio"); return; }
-            
             const nuevo = { nombre, telefono, cumple, timestamp: Date.now() };
 
             if (isFirebaseActive && db) {
-                try {
-                    await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevo);
-                    window.mostrarNotificacion("Contacto Guardado");
+                try { await db.collection("barberias").doc("bmbarber_global").collection("contactos").add(nuevo); window.mostrarNotificacion("Contacto Guardado");
                 } catch (e) { window.mostrarNotificacion("Error red"); }
             } else {
-                nuevo.id = 'local_ctc_' + Date.now();
-                window.localState.contactos.push(nuevo);
-                window.guardarLocal();
-                window.renderContactos();
-                window.mostrarNotificacion("Contacto Guardado (Local)");
+                nuevo.id = 'local_ctc_' + Date.now(); window.localState.contactos.push(nuevo); window.guardarLocal(); window.renderContactos(); window.mostrarNotificacion("Contacto Guardado (Local)");
             }
-
-            document.getElementById('contacto-nombre').value = '';
-            document.getElementById('contacto-telefono').value = '';
-            document.getElementById('contacto-cumple').value = '';
+            document.getElementById('contacto-nombre').value = ''; document.getElementById('contacto-telefono').value = ''; document.getElementById('contacto-cumple').value = '';
         };
 
         window.renderContactos = function() {
-            const datalist = document.getElementById('lista-nombres-contactos');
             const lista = document.getElementById('lista-contactos');
             const search = (document.getElementById('buscar-contacto')?.value || '').toLowerCase();
-            
-            if(datalist) datalist.innerHTML = '';
-            if(lista) lista.innerHTML = '';
-
-            // Llenar datalist (autocompletar)
-            window.localState.contactos.forEach(c => {
-                if(datalist) {
-                    const opt = document.createElement('option');
-                    opt.value = c.nombre;
-                    datalist.appendChild(opt);
-                }
-            });
-
-            // Llenar lista visual
-            if(!lista) return;
+            if(!lista) return; lista.innerHTML = '';
             const filtrados = window.localState.contactos.filter(c => c.nombre.toLowerCase().includes(search) || c.telefono.includes(search));
             filtrados.sort((a,b) => a.nombre.localeCompare(b.nombre));
 
@@ -952,25 +921,15 @@
             window.abrirConfirmacion("¿Borrar contacto?", async () => {
                 if (isFirebaseActive && db) {
                     try { await db.collection("barberias").doc("bmbarber_global").collection("contactos").doc(id).delete(); } catch(e){}
-                } else {
-                    window.localState.contactos = window.localState.contactos.filter(c => c.id !== id);
-                    window.guardarLocal(); window.renderContactos();
-                }
+                } else { window.localState.contactos = window.localState.contactos.filter(c => c.id !== id); window.guardarLocal(); window.renderContactos(); }
             });
         };
 
         let calDate = new Date();
         let selectedDate = new Date();
 
-        window.cambiarMes = function(delta) {
-            calDate.setMonth(calDate.getMonth() + delta);
-            renderCalendario();
-        };
-
-        window.seleccionarDia = function(y, m, d) {
-            selectedDate = new Date(y, m, d);
-            renderCalendario();
-        };
+        window.cambiarMes = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendario(); };
+        window.seleccionarDia = function(y, m, d) { selectedDate = new Date(y, m, d); renderCalendario(); };
 
         window.renderCalendario = function() {
             const container = document.getElementById('dias-calendario');
@@ -981,19 +940,15 @@
             const year = calDate.getFullYear();
             const month = calDate.getMonth();
             const today = new Date();
-
             const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
             mesLabel.textContent = `${meses[month]} ${year}`;
             tituloAgenda.textContent = `Turnos del ${selectedDate.getDate()} de ${meses[selectedDate.getMonth()]}`;
-
             container.innerHTML = '';
             
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-            for (let i = 0; i < firstDay; i++) {
-                container.appendChild(document.createElement('div'));
-            }
+            for (let i = 0; i < firstDay; i++) container.appendChild(document.createElement('div'));
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const div = document.createElement('div');
@@ -1007,7 +962,6 @@
                 if (isToday) div.classList.add('dia-hoy');
                 if (isSelected) div.classList.add('dia-seleccionado');
 
-                // Puntito si hay turnos
                 const fechaStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                 const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaStr);
                 if (turnosDia.length > 0) {
@@ -1017,7 +971,6 @@
                     if(isToday && !isSelected) dot.classList.replace('bg-[#111]', 'bg-green-500');
                     div.appendChild(dot);
                 }
-
                 container.appendChild(div);
             }
             renderTurnosDia();
@@ -1029,46 +982,27 @@
             const servicio = document.getElementById('turno-servicio').value.trim();
             
             if(!hora || !cliente) { window.mostrarNotificacion("Hora y Cliente obligatorios"); return; }
-
-            const y = selectedDate.getFullYear();
-            const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-            const d = String(selectedDate.getDate()).padStart(2, '0');
-            const fechaStr = `${y}-${m}-${d}`;
-
+            const fechaStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
             const nuevoTurno = { fecha: fechaStr, hora, cliente, servicio, timestamp: Date.now() };
 
             if (isFirebaseActive && db) {
-                try {
-                    await db.collection("barberias").doc("bmbarber_global").collection("turnos").add(nuevoTurno);
-                    window.mostrarNotificacion("Turno Agendado");
+                try { await db.collection("barberias").doc("bmbarber_global").collection("turnos").add(nuevoTurno); window.mostrarNotificacion("Turno Agendado");
                 } catch(e) { window.mostrarNotificacion("Error red"); }
             } else {
-                nuevoTurno.id = 'local_tno_' + Date.now();
-                window.localState.turnos.push(nuevoTurno);
-                window.guardarLocal(); window.renderCalendario();
+                nuevoTurno.id = 'local_tno_' + Date.now(); window.localState.turnos.push(nuevoTurno); window.guardarLocal(); window.renderCalendario();
             }
-
-            document.getElementById('turno-hora').value = '';
-            document.getElementById('turno-cliente').value = '';
-            document.getElementById('turno-servicio').value = '';
+            document.getElementById('turno-hora').value = ''; document.getElementById('turno-cliente').value = ''; document.getElementById('turno-servicio').value = '';
         };
 
         window.renderTurnosDia = function() {
             const container = document.getElementById('lista-turnos-dia');
-            if(!container) return;
-            container.innerHTML = '';
-
-            const y = selectedDate.getFullYear();
-            const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-            const d = String(selectedDate.getDate()).padStart(2, '0');
-            const fechaStr = `${y}-${m}-${d}`;
-
+            if(!container) return; container.innerHTML = '';
+            const fechaStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
             const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaStr);
             turnosDia.sort((a,b) => a.hora.localeCompare(b.hora));
 
             if(turnosDia.length === 0) {
-                container.innerHTML = '<p class="text-xs text-gray-500 text-center font-bold italic mt-4">Sin turnos para este día.</p>';
-                return;
+                container.innerHTML = '<p class="text-xs text-gray-500 text-center font-bold italic mt-4">Sin turnos para este día.</p>'; return;
             }
 
             turnosDia.forEach(t => {
@@ -1089,12 +1023,8 @@
         window.borrarTurno = async function(id) {
             if (isFirebaseActive && db) {
                 try { await db.collection("barberias").doc("bmbarber_global").collection("turnos").doc(id).delete(); } catch(e){}
-            } else {
-                window.localState.turnos = window.localState.turnos.filter(t => t.id !== id);
-                window.guardarLocal(); window.renderCalendario();
-            }
+            } else { window.localState.turnos = window.localState.turnos.filter(t => t.id !== id); window.guardarLocal(); window.renderCalendario(); }
         };
-
     </script>
 </body>
 </html>
