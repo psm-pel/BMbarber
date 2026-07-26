@@ -16,7 +16,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
         
         /* Tema Claro/Silver basado en el logo BM Barber */
         body { font-family: 'Inter', sans-serif; background-color: #E4E4E4; color: #111111; }
@@ -65,7 +65,7 @@
         window.localState = {
             cortes: [],
             precios: { "corte_pelo": 5000, "corte_barba": 7000 },
-            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo: 0, otros: 0 },
+            gastos: { alquiler: 0, luz: 0, internet: 0, monotributo_tope: 0, monotributo_mes: 0, otros: 0 },
             inicioPeriodo: null,
             contactos: [],
             turnos: []
@@ -106,6 +106,7 @@
             if(!db) return; 
             
             try {
+                // Lectura de configuraciones desde la ruta global unificada
                 const docPrecios = await db.collection("barberias").doc("bmbarber_global").collection("config").doc("precios").get();
                 if(docPrecios.exists) { window.localState.precios = docPrecios.data(); }
                 
@@ -117,6 +118,7 @@
             } catch(e) {}
 
             try {
+                // Sincronización en tiempo real de cortes, contactos y turnos
                 db.collection("barberias").doc("bmbarber_global").collection("cortes")
                 .orderBy("timestamp", "desc")
                 .onSnapshot((snapshot) => {
@@ -153,6 +155,8 @@
                     if(!window.localState.contactos) window.localState.contactos = [];
                     if(!window.localState.turnos) window.localState.turnos = [];
                     if(!window.localState.gastos.otros) window.localState.gastos.otros = 0;
+                    if(!window.localState.gastos.monotributo_tope) window.localState.gastos.monotributo_tope = 0;
+                    if(!window.localState.gastos.monotributo_mes) window.localState.gastos.monotributo_mes = 0;
                 }
             } catch(e) {}
             window.actualizarUI();
@@ -187,7 +191,7 @@
     <div id="login-screen" class="absolute inset-0 z-50 bg-[#E4E4E4] flex flex-col items-center justify-center">
         <div class="glass-panel p-8 flex flex-col items-center gap-6 w-full max-w-xs mx-4 bg-[#E4E4E4]">
             <img src="./logobm.jpg" alt="Logo BMbarber" onerror="this.src='https://placehold.co/128x128/111111/E4E4E4?text=BM'" class="w-24 h-24 border-2 border-[#111] object-cover rounded-full shadow-lg">
-            <h1 class="text-xl font-bold uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
+            <h1 class="text-xl font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
             <div class="w-full">
                 <input type="password" id="login-password" placeholder="CONTRASEÑA" onkeypress="if(event.key === 'Enter') window.attemptLogin()" class="w-full p-3 text-center tracking-widest text-xs uppercase placeholder:tracking-normal placeholder:text-gray-500 transition-colors focus:ring-2 focus:ring-[#111] outline-none">
                 <p id="login-error" class="text-red-600 text-[10px] mt-2 text-center opacity-0 transition-opacity font-bold">Contraseña incorrecta</p>
@@ -200,10 +204,9 @@
     <nav class="border-t border-[#111]/20 md:border-t-0 md:border-r md:border-[#111] w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col bg-[#E4E4E4]/95 backdrop-blur-md">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-[#111]">
             <img src="./logobm.jpg" alt="Logo BMbarber" onerror="this.src='https://placehold.co/128x128/111111/E4E4E4?text=BM'" class="w-24 h-24 border-2 border-[#111] object-cover rounded-full shadow-md">
-            <h1 class="text-lg font-bold uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
+            <h1 class="text-lg font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
         </div>
         
-        <!-- Menú con Scroll horizontal oculto en celulares -->
         <div class="flex w-full md:flex-col p-1 gap-1 overflow-x-auto overflow-y-hidden snap-x hide-scrollbar">
             <button onclick="window.navigate('caja')" id="nav-caja" class="nav-btn btn-active flex-1 min-w-[65px] flex flex-col items-center justify-center gap-1 p-2 md:p-3 transition-all snap-start text-[#111]">
                 <i class="ph ph-scissors text-xl"></i> <span class="text-[8px] md:text-[9px] uppercase font-bold tracking-widest">Caja</span>
@@ -226,7 +229,7 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua visible siempre -->
+    <!-- Marca de Agua visible en PC y Móvil -->
     <a href="https://wa.me/543454956044" target="_blank" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:left-4 md:right-auto z-50 flex items-center gap-2 md:gap-3 opacity-70 hover:opacity-100 transition-all pointer-events-auto cursor-pointer hover:scale-105">
         <img src="./psm.png" alt="Logo PSM" onerror="this.src='https://placehold.co/128x128/111111/E4E4E4?text=PSM'" class="w-6 h-6 md:w-8 md:h-8 rounded-full border border-[#111] object-cover">
         <span class="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/80 backdrop-blur-sm">by: PSM</span>
@@ -242,33 +245,32 @@
         
         <!-- VISTA CAJA -->
         <div id="view-caja" class="view-section max-w-lg mx-auto">
-            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase font-bold">Nueva Operación</h2>
+            <h2 class="text-4xl font-black mb-10 tracking-tighter uppercase">Nueva Operación</h2>
             <div class="glass-panel p-8">
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Servicio Realizado</label>
-                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer font-medium">
+                <select id="caja-servicio" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer font-bold">
                     <option value="corte_pelo">Corte de Pelo</option>
                     <option value="corte_barba">Corte de Pelo + Barba</option>
                 </select>
                 
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Método de Pago</label>
-                <select id="caja-metodo" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer font-medium">
-                    <option value="efectivo">Efectivo (En negro)</option>
-                    <option value="tarjeta">Tarjeta / Transferencia (Blanco)</option>
-                    <option value="amigo">Precio Amigo (Manual)</option>
+                <select id="caja-metodo" onchange="window.updateCajaPrice()" class="w-full p-4 mb-6 outline-none text-sm cursor-pointer font-bold">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta / Transferencia</option>
+                    <option value="amigo">Precio Amigo</option>
                 </select>
 
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Monto a Cobrar (ARS)</label>
-                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-bold focus:ring-2 focus:ring-[#111]" readonly>
+                <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-black focus:ring-2 focus:ring-[#111]" readonly>
                 <button onclick="window.registrarOperacion()" class="w-full border border-[#111] bg-[#111] text-[#E4E4E4] hover:bg-black font-bold py-3 md:py-4 uppercase text-[10px] md:text-xs tracking-widest transition-all shadow-md">Registrar Corte</button>
             </div>
         </div>
 
         <!-- VISTA CALENDARIO -->
         <div id="view-calendario" class="view-section hidden max-w-5xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase font-bold">Calendario</h2>
+            <h2 class="text-2xl md:text-4xl font-black mb-6 md:mb-10 tracking-tighter uppercase">Calendario</h2>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-                <!-- Grilla Calendario -->
                 <div class="glass-panel p-4 md:p-6">
                     <div class="flex justify-between items-center mb-6 border-b border-[#111] pb-4">
                         <button onclick="window.cambiarMes(-1)" class="p-2 hover:bg-[#111] hover:text-[#E4E4E4] transition-colors border border-[#111]"><i class="ph ph-caret-left"></i></button>
@@ -278,7 +280,6 @@
                     <div id="calendario-grid" class="grid grid-cols-7 gap-1 md:gap-2"></div>
                 </div>
 
-                <!-- Panel Dia Especifico -->
                 <div class="glass-panel p-4 md:p-6 flex flex-col h-auto min-h-[500px]">
                     <h3 class="text-xs md:text-sm uppercase tracking-widest border-b border-[#111] pb-2 mb-4 font-bold">Turnos: <span id="turnos-fecha-texto" class="font-bold text-gray-500">Selecciona un día</span></h3>
                     
@@ -302,10 +303,9 @@
 
         <!-- VISTA CONTACTOS -->
         <div id="view-contactos" class="view-section hidden max-w-5xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase font-bold">Agenda de Clientes</h2>
+            <h2 class="text-2xl md:text-4xl font-black mb-6 md:mb-10 tracking-tighter uppercase">Agenda de Clientes</h2>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-                <!-- Formulario Agregar Contacto -->
                 <div class="glass-panel p-5 md:p-6 lg:col-span-1 h-fit">
                     <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-6 border-b border-[#111] pb-2 font-bold">Nuevo Cliente</h3>
                     
@@ -321,7 +321,6 @@
                     <button onclick="window.guardarContacto()" class="w-full border border-[#111] bg-[#111] text-[#E4E4E4] font-bold py-3 md:py-4 uppercase text-[10px] md:text-xs tracking-widest hover:bg-black transition-all">Añadir a la Agenda</button>
                 </div>
 
-                <!-- Lista de Contactos -->
                 <div class="glass-panel p-5 md:p-6 lg:col-span-2">
                     <div class="flex justify-between items-center mb-4 border-b border-[#111] pb-2">
                         <h3 class="text-[10px] md:text-sm uppercase tracking-widest font-bold">Directorio</h3>
@@ -349,7 +348,7 @@
         <!-- VISTA HISTORIAL -->
         <div id="view-historial" class="view-section hidden max-w-4xl mx-auto">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-10 gap-4">
-                <h2 class="text-2xl md:text-4xl font-light tracking-tighter uppercase font-bold">Historial</h2>
+                <h2 class="text-2xl md:text-4xl font-black tracking-tighter uppercase">Historial</h2>
                 <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-xs md:text-sm outline-none border-[#111] w-full md:w-auto font-bold bg-[#E4E4E4] cursor-pointer">
                     <option value="hoy">Solo Hoy</option>
                     <option value="mes" selected>Periodo Actual</option>
@@ -374,14 +373,14 @@
             <div class="mt-4 md:mt-6 flex justify-end">
                 <div class="glass-panel p-3 md:p-4 inline-block flex items-center gap-4 bg-[#111] text-[#E4E4E4]">
                     <span class="text-[10px] md:text-xs uppercase tracking-widest font-bold">Total Vista:</span>
-                    <span id="historial-total" class="text-xl md:text-2xl font-bold">$0</span>
+                    <span id="historial-total" class="text-xl md:text-2xl font-black">$0</span>
                 </div>
             </div>
         </div>
 
         <!-- VISTA AJUSTES -->
         <div id="view-gastos" class="view-section hidden max-w-2xl mx-auto">
-            <h2 class="text-2xl md:text-4xl font-light mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left font-bold">Ajustes y Gastos</h2>
+            <h2 class="text-2xl md:text-4xl font-black mb-6 md:mb-10 tracking-tighter uppercase text-center md:text-left">Ajustes y Gastos</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                 <div class="glass-panel p-5 md:p-6">
                     <h3 class="text-[10px] md:text-sm uppercase tracking-widest mb-4 md:mb-6 border-b border-[#111] pb-2 font-bold">Precios de Servicios</h3>
@@ -399,8 +398,10 @@
                     <input type="number" id="gasto-luz" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
                     <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Internet / WiFi (ARS)</label>
                     <input type="number" id="gasto-internet" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
-                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Monotributo (ARS)</label>
-                    <input type="number" id="gasto-monotributo" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700 text-purple-700">Tope Monotributo (ARS)</label>
+                    <input type="number" id="gasto-monotributo-tope" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
+                    <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700 text-purple-700">Monotributo Mes (ARS)</label>
+                    <input type="number" id="gasto-monotributo-mes" class="w-full p-2 md:p-3 mb-3 outline-none text-xs md:text-sm font-bold">
                     <label class="block text-[10px] md:text-xs uppercase tracking-widest mb-2 font-bold text-gray-700 text-blue-700">Otros Gastos (ARS)</label>
                     <input type="number" id="gasto-otros" class="w-full p-2 md:p-3 mb-5 outline-none text-xs md:text-sm font-bold">
                     <button onclick="window.guardarGastos()" class="w-full border border-[#111] hover:bg-[#111] hover:text-[#E4E4E4] py-3 uppercase text-[10px] md:text-xs font-bold tracking-widest transition-all">Actualizar Gastos</button>
@@ -410,14 +411,14 @@
 
         <!-- VISTA BALANCE -->
         <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
-            <h2 class="text-4xl font-light mb-10 tracking-tighter uppercase font-bold">Balance</h2>
+            <h2 class="text-4xl font-black mb-10 tracking-tighter uppercase">Balance</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="glass-panel p-6 text-center relative">
                     <div class="flex justify-center items-center gap-2 mb-2">
                         <p class="text-xs uppercase tracking-widest font-bold">Ingresos</p>
                         <span id="bal-cantidad-cortes" class="text-[9px] bg-[#111] text-[#E4E4E4] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest shadow">0 Cortes</span>
                     </div>
-                    <p id="bal-ingresos" class="text-3xl font-bold mb-2">$0</p>
+                    <p id="bal-ingresos" class="text-3xl font-black mb-2">$0</p>
                     <div class="flex justify-between text-[9px] text-gray-600 border-t border-[#111]/30 pt-2 uppercase tracking-widest mt-2 gap-1 font-bold">
                         <span title="Ingresos en Negro">Efec: <b id="bal-ingresos-efectivo" class="text-[#111]">$0</b></span>
                         <span title="Ingresos en Blanco">Tarj: <b id="bal-ingresos-tarjeta" class="text-[#111]">$0</b></span>
@@ -426,8 +427,15 @@
                 </div>
                 <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-estado">
                     <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold" id="bal-label-estado">Estado (Ganancia Libre)</p>
-                    <p id="bal-estado" class="text-2xl md:text-3xl font-bold mb-1">$0</p>
+                    <p id="bal-estado" class="text-2xl md:text-3xl font-black mb-1">$0</p>
                     <p id="bal-gasto-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-80 font-bold">(Gasto Total: $0)</p>
+                </div>
+                
+                <!-- CAJA: MARGEN AFIP -->
+                <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-monotributo">
+                    <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold text-gray-700" id="bal-label-monotributo" title="Tope - Ingresos en Blanco">Margen AFIP (Blanco)</p>
+                    <p id="bal-margen-monotributo" class="text-2xl md:text-3xl font-black mb-1">$0</p>
+                    <p id="bal-tope-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-80 font-bold text-gray-600">(Tope: $0)</p>
                 </div>
             </div>
             
@@ -526,6 +534,7 @@
                 inputMonto.focus();
             } else {
                 inputMonto.readOnly = true;
+                inputMonto.classList.add('text-gray-700');
                 inputMonto.value = window.localState.precios[tipo] || 0;
             }
         };
@@ -580,7 +589,8 @@
                 alquiler: parseFloat(document.getElementById('gasto-alquiler').value) || 0,
                 luz: parseFloat(document.getElementById('gasto-luz').value) || 0,
                 internet: parseFloat(document.getElementById('gasto-internet').value) || 0,
-                monotributo: parseFloat(document.getElementById('gasto-monotributo').value) || 0,
+                monotributo_tope: parseFloat(document.getElementById('gasto-monotributo-tope').value) || 0,
+                monotributo_mes: parseFloat(document.getElementById('gasto-monotributo-mes').value) || 0,
                 otros: parseFloat(document.getElementById('gasto-otros').value) || 0
             };
             window.localState.gastos = gastos;
@@ -808,28 +818,26 @@
 
         window.renderTurnosDelDia = function() {
             const lista = document.getElementById('lista-turnos');
-            if(!lista) return; lista.innerHTML = '';
+            if(!lista) return;
+            
+            lista.innerHTML = '';
+            const turnosDia = window.localState.turnos.filter(t => t.fecha === fechaSeleccionadaStr).sort((a, b) => a.hora.localeCompare(b.hora));
 
-            if(!fechaSeleccionadaStr) {
-                lista.innerHTML = '<p class="text-[10px] text-gray-500 uppercase tracking-widest text-center mt-4 font-bold">Toca un día en el calendario</p>';
+            if(turnosDia.length === 0) {
+                lista.innerHTML = '<p class="text-xs text-gray-500 uppercase tracking-widest text-center mt-4 font-bold">Sin turnos agendados</p>';
                 return;
             }
 
-            const turnosHoy = window.localState.turnos.filter(t => t.fecha === fechaSeleccionadaStr);
-            turnosHoy.sort((a,b) => a.hora.localeCompare(b.hora));
-
-            if(turnosHoy.length === 0) {
-                lista.innerHTML = '<p class="text-[10px] text-gray-500 uppercase tracking-widest text-center mt-4 font-bold">Sin turnos para este día</p>';
-                return;
-            }
-
-            turnosHoy.forEach(turno => {
+            turnosDia.forEach(turno => {
                 const div = document.createElement('div');
-                div.className = 'border border-[#111] p-3 flex justify-between items-center bg-[#E4E4E4] hover:bg-gray-300 transition-colors mb-2 shadow-sm';
+                div.className = 'flex justify-between items-center bg-[#E4E4E4] border border-[#111] p-2 md:p-3 shadow-sm';
                 div.innerHTML = `
                     <div>
-                        <p class="text-[#111] font-bold text-xs md:text-sm uppercase flex items-center gap-2"><i class="ph ph-clock text-green-700"></i> ${turno.hora} <span class="text-gray-700 ml-1 font-bold">${turno.cliente}</span></p>
-                        ${turno.detalle ? `<p class="text-[9px] md:text-[10px] text-gray-600 uppercase tracking-widest mt-1 ml-6 font-bold">${turno.detalle}</p>` : ''}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs md:text-sm font-black text-[#111] bg-[#111]/10 px-1 rounded">${turno.hora}</span>
+                            <span class="text-xs md:text-sm font-bold uppercase tracking-wide text-[#111]">${turno.cliente}</span>
+                        </div>
+                        <div class="text-[10px] md:text-xs text-gray-600 mt-1 uppercase font-bold tracking-widest">${turno.detalle || 'Sin detalle'}</div>
                     </div>
                     <button onclick="window.borrarTurno('${turno.id}')" class="text-red-500 hover:text-red-700 transition-colors p-2" title="Cancelar Turno">
                         <i class="ph ph-x-circle text-lg md:text-xl"></i>
@@ -850,7 +858,8 @@
                 if(document.getElementById('gasto-alquiler')) document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || 0;
                 if(document.getElementById('gasto-luz')) document.getElementById('gasto-luz').value = window.localState.gastos.luz || 0;
                 if(document.getElementById('gasto-internet')) document.getElementById('gasto-internet').value = window.localState.gastos.internet || 0;
-                if(document.getElementById('gasto-monotributo')) document.getElementById('gasto-monotributo').value = window.localState.gastos.monotributo || 0;
+                if(document.getElementById('gasto-monotributo-tope')) document.getElementById('gasto-monotributo-tope').value = window.localState.gastos.monotributo_tope || 0;
+                if(document.getElementById('gasto-monotributo-mes')) document.getElementById('gasto-monotributo-mes').value = window.localState.gastos.monotributo_mes || 0;
                 if(document.getElementById('gasto-otros')) document.getElementById('gasto-otros').value = window.localState.gastos.otros || 0;
 
                 window.updateCajaPrice();
@@ -918,7 +927,13 @@
                 const ingresosTarjeta = cortesMes.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosAmigo = cortesMes.filter(c => c.metodoPago === 'amigo').reduce((acc, curr) => acc + curr.monto, 0);
                 
-                const gastosTotales = Object.values(window.localState.gastos).reduce((acc, curr) => acc + Number(curr), 0);
+                const g = window.localState.gastos;
+                const gastosTotales = (Number(g.alquiler) || 0) + 
+                                      (Number(g.luz) || 0) + 
+                                      (Number(g.internet) || 0) + 
+                                      (Number(g.monotributo_mes) || 0) + 
+                                      (Number(g.otros) || 0);
+
                 const estado = ingresosTotales - gastosTotales;
 
                 if(document.getElementById('bal-ingresos')) document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
@@ -949,6 +964,29 @@
                         balLabel.classList.add('text-[#E4E4E4]');
                         balLabel.textContent = "Estado (Ganancia Libre)";
                         balEstado.classList.remove('text-red-600');
+                    }
+                }
+
+                const topeMonotributo = Number(g.monotributo_tope) || 0;
+                const margenMonotributo = topeMonotributo - ingresosTarjeta;
+                
+                const balMargen = document.getElementById('bal-margen-monotributo');
+                const balTopeTotal = document.getElementById('bal-tope-total');
+                const cajaMonotributo = document.getElementById('bal-caja-monotributo');
+                const labelMonotributo = document.getElementById('bal-label-monotributo');
+                
+                if(balMargen) {
+                    balMargen.textContent = formatMoney(margenMonotributo);
+                    if(balTopeTotal) balTopeTotal.textContent = `(Tope: ${formatMoney(topeMonotributo)})`;
+                    
+                    if (margenMonotributo < 0) {
+                        cajaMonotributo.classList.add('border-red-600', 'bg-red-100');
+                        balMargen.classList.add('text-red-600');
+                        labelMonotributo.classList.add('text-red-600');
+                    } else {
+                        cajaMonotributo.classList.remove('border-red-600', 'bg-red-100');
+                        balMargen.classList.remove('text-red-600');
+                        labelMonotributo.classList.remove('text-red-600');
                     }
                 }
 
