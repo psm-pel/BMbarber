@@ -413,6 +413,7 @@
         <div id="view-balance" class="view-section hidden max-w-4xl mx-auto">
             <h2 class="text-4xl font-black mb-10 tracking-tighter uppercase">Balance</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- CAJA 1: Ingresos -->
                 <div class="glass-panel p-6 text-center relative">
                     <div class="flex justify-center items-center gap-2 mb-2">
                         <p class="text-xs uppercase tracking-widest font-bold">Ingresos</p>
@@ -425,13 +426,15 @@
                         <span title="Precio Amigo" class="text-blue-600">Amigo: <b id="bal-ingresos-amigo" class="text-[#111]">$0</b></span>
                     </div>
                 </div>
+
+                <!-- CAJA 2: Estado (Libre/Deuda) -->
                 <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-estado">
                     <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold" id="bal-label-estado">Estado (Ganancia Libre)</p>
                     <p id="bal-estado" class="text-2xl md:text-3xl font-black mb-1">$0</p>
                     <p id="bal-gasto-total" class="text-[9px] md:text-[10px] uppercase tracking-widest mt-1 opacity-80 font-bold">(Gasto Total: $0)</p>
                 </div>
                 
-                <!-- CAJA: MARGEN AFIP -->
+                <!-- CAJA 3: Margen AFIP -->
                 <div class="glass-panel p-6 text-center transition-colors flex flex-col justify-center" id="bal-caja-monotributo">
                     <p class="text-[10px] md:text-xs uppercase tracking-widest mb-1 md:mb-2 font-bold text-gray-700" id="bal-label-monotributo" title="Tope - Ingresos en Blanco">Margen AFIP (Blanco)</p>
                     <p id="bal-margen-monotributo" class="text-2xl md:text-3xl font-black mb-1">$0</p>
@@ -448,6 +451,7 @@
                 <p id="bal-mensaje" class="text-center text-[9px] md:text-sm uppercase tracking-widest mt-4 md:mt-6 font-bold"></p>
             </div>
 
+            <!-- Botón Finalizar Mes -->
             <div class="glass-panel p-6 md:p-8 flex flex-col items-center justify-center text-center border border-red-500 bg-[#E4E4E4]">
                 <h3 class="text-sm uppercase tracking-widest mb-3 text-[#111] font-bold"><i class="ph ph-calendar-check mr-2"></i>¿Cerrar el ciclo actual?</h3>
                 <p class="text-[10px] md:text-xs text-gray-700 font-medium mb-6 max-w-lg leading-relaxed">Al finalizar el mes, tu balance y el contador de cortes <b>volverán a cero</b> para iniciar un nuevo periodo contable limpio. Tu historial anterior seguirá guardado en "Todo el Historial".</p>
@@ -496,11 +500,39 @@
         window.attemptLogin = function() {
             const passInput = document.getElementById('login-password');
             const errorMsg = document.getElementById('login-error');
-            if (passInput.value === 'BMLaprida1092') {
+            const pass = passInput.value;
+
+            // Login exitoso si coincide alguna de las contraseñas
+            if (pass === 'BMLaprida1092' || pass === 'laprida1092') {
+                
+                // Ocultar pantalla de login
                 document.getElementById('login-screen').classList.add('hidden');
+                
+                // Determinar el rol (Admin o Empleado) y guardarlo en memoria
+                const isAdmin = (pass === 'BMLaprida1092');
+                window.currentUserRole = isAdmin ? 'admin' : 'empleado';
+                
+                // Seleccionar los botones sensibles
+                const navHistorial = document.getElementById('nav-historial');
+                const navGastos = document.getElementById('nav-gastos');
+                const navBalance = document.getElementById('nav-balance');
+
+                if (!isAdmin) {
+                    // MODO EMPLEADO: Ocultar secciones sensibles
+                    if(navHistorial) navHistorial.style.display = 'none';
+                    if(navGastos) navGastos.style.display = 'none';
+                    if(navBalance) navBalance.style.display = 'none';
+                } else {
+                    // MODO ADMIN: Asegurarse de que todo esté visible
+                    if(navHistorial) navHistorial.style.display = '';
+                    if(navGastos) navGastos.style.display = '';
+                    if(navBalance) navBalance.style.display = '';
+                }
+
                 passInput.value = ''; 
                 window.actualizarUI();
             } else {
+                // Contraseña incorrecta
                 errorMsg.classList.remove('opacity-0');
                 setTimeout(() => errorMsg.classList.add('opacity-0'), 2000);
             }
@@ -546,7 +578,14 @@
             
             if (isNaN(monto) || monto <= 0) { window.mostrarNotificacion("Revisa el monto"); return; }
 
-            const nuevaOperacion = { tipo: tipo, metodoPago: metodo, monto: monto, timestamp: Date.now() };
+            // Se adjunta el "autor" a la operación para el historial
+            const nuevaOperacion = { 
+                tipo: tipo, 
+                metodoPago: metodo, 
+                monto: monto, 
+                timestamp: Date.now(),
+                autor: window.currentUserRole || 'admin'
+            };
 
             if (isFirebaseActive && db) { 
                 try {
@@ -743,12 +782,14 @@
                 div.className = 'flex flex-col items-center justify-center p-2 h-10 md:h-14 border border-[#111]/10 cursor-pointer transition-colors relative';
                 
                 if (fechaStr === hoyStr) {
+                    // Es HOY
                     if (fechaSeleccionadaStr === fechaStr) {
                         div.classList.add('bg-[#111]', 'text-[#E4E4E4]', 'border-2', 'border-green-600'); 
                     } else {
                         div.classList.add('bg-green-100', 'text-green-800', 'border', 'border-green-600'); 
                     }
                 } else {
+                    // NO es hoy
                     if (fechaSeleccionadaStr === fechaStr) {
                         div.classList.add('bg-[#111]', 'text-[#E4E4E4]'); 
                     } else {
@@ -853,6 +894,7 @@
 
         window.actualizarUI = function() {
             try {
+                // Actualizar Inputs de Ajustes
                 if(document.getElementById('precio-pelo')) document.getElementById('precio-pelo').value = window.localState.precios.corte_pelo || 0;
                 if(document.getElementById('precio-barba')) document.getElementById('precio-barba').value = window.localState.precios.corte_barba || 0;
                 if(document.getElementById('gasto-alquiler')) document.getElementById('gasto-alquiler').value = window.localState.gastos.alquiler || 0;
@@ -864,6 +906,7 @@
 
                 window.updateCajaPrice();
 
+                // HISTORIAL DE CORTES Y FILTROS
                 const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'mes';
                 const now = new Date();
                 const inicioPeriodo = window.localState.inicioPeriodo;
@@ -895,11 +938,16 @@
                         metodoIcon = '<i class="ph ph-money text-lg" title="Efectivo"></i>'; metodoClass = 'text-[#111]';
                     }
 
+                    // Etiqueta visual para distinguir quién hizo el cobro (Auditoría)
+                    const autorTag = (corte.autor === 'empleado') 
+                        ? '<span class="ml-2 text-[8px] md:text-[9px] bg-gray-400 text-[#111] px-1.5 py-0.5 rounded font-black tracking-widest" title="Registrado por Empleado">EMP</span>'
+                        : '<span class="ml-2 text-[8px] md:text-[9px] bg-[#111] text-[#E4E4E4] px-1.5 py-0.5 rounded font-black tracking-widest" title="Registrado por Admin">ADM</span>';
+
                     const tr = document.createElement('tr');
                     tr.className = 'border-b border-[#111]/30 hover:bg-[#111]/10 transition-colors text-[#111] font-bold';
                     tr.innerHTML = `
                         <td class="p-3 md:p-4 text-[9px] md:text-xs">${formatearFecha(corte.timestamp)}</td>
-                        <td class="p-3 md:p-4 whitespace-nowrap">${getNombreServicio(corte.tipo)}</td>
+                        <td class="p-3 md:p-4 whitespace-nowrap">${getNombreServicio(corte.tipo)} ${autorTag}</td>
                         <td class="p-3 md:p-4 text-center ${metodoClass}">${metodoIcon}</td>
                         <td class="p-3 md:p-4 text-right font-black text-[#111]">${formatMoney(corte.monto)}</td>
                         <td class="p-3 md:p-4 text-center">
@@ -913,12 +961,14 @@
 
                 if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
 
+                // ACTUALIZACIÓN DEL BALANCE GENERAL (INGRESOS, GASTOS, ESTADO, MARGEN AFIP)
                 const cortesMes = window.localState.cortes.filter(corte => {
                     if (inicioPeriodo) return corte.timestamp >= inicioPeriodo;
                     const fechaCorte = new Date(corte.timestamp);
                     return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
                 });
 
+                // Calculos de Ingresos Desglosados
                 const cantidadCortes = cortesMes.length;
                 if(document.getElementById('bal-cantidad-cortes')) document.getElementById('bal-cantidad-cortes').textContent = `${cantidadCortes} Corte${cantidadCortes !== 1 ? 's' : ''}`;
 
@@ -927,6 +977,7 @@
                 const ingresosTarjeta = cortesMes.filter(c => c.metodoPago === 'tarjeta').reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosAmigo = cortesMes.filter(c => c.metodoPago === 'amigo').reduce((acc, curr) => acc + curr.monto, 0);
                 
+                // Calculos de Gastos Reales (Se ignora Tope de Monotributo aquí)
                 const g = window.localState.gastos;
                 const gastosTotales = (Number(g.alquiler) || 0) + 
                                       (Number(g.luz) || 0) + 
@@ -936,11 +987,13 @@
 
                 const estado = ingresosTotales - gastosTotales;
 
+                // Aplicar Ingresos en la UI
                 if(document.getElementById('bal-ingresos')) document.getElementById('bal-ingresos').textContent = formatMoney(ingresosTotales);
                 if(document.getElementById('bal-ingresos-efectivo')) document.getElementById('bal-ingresos-efectivo').textContent = formatMoney(ingresosEfectivo);
                 if(document.getElementById('bal-ingresos-tarjeta')) document.getElementById('bal-ingresos-tarjeta').textContent = formatMoney(ingresosTarjeta);
                 if(document.getElementById('bal-ingresos-amigo')) document.getElementById('bal-ingresos-amigo').textContent = formatMoney(ingresosAmigo);
                 
+                // Aplicar Estado en la UI
                 const balEstado = document.getElementById('bal-estado');
                 const balLabel = document.getElementById('bal-label-estado');
                 const cajaEstado = document.getElementById('bal-caja-estado');
@@ -967,6 +1020,7 @@
                     }
                 }
 
+                // Aplicar Lógica del Margen AFIP (Tope - Tarjeta)
                 const topeMonotributo = Number(g.monotributo_tope) || 0;
                 const margenMonotributo = topeMonotributo - ingresosTarjeta;
                 
@@ -990,6 +1044,7 @@
                     }
                 }
 
+                // Barra de Progreso y Mensaje
                 let porcentaje = 0;
                 if (gastosTotales > 0) porcentaje = (ingresosTotales / gastosTotales) * 100;
                 else if (ingresosTotales > 0) porcentaje = 100;
