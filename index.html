@@ -9,7 +9,7 @@
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <!-- Firebase !-->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -198,7 +198,6 @@
     <div id="login-screen" class="absolute inset-0 z-50 bg-[#E4E4E4] flex flex-col items-center justify-center">
         <div class="glass-panel p-12 flex flex-col items-center gap-8 w-full max-w-sm mx-4 bg-[#E4E4E4]">
             
-            <!-- AQUÍ PUEDES PEGAR EL LINK DE TU LOGO -->
             <img src="./logobm.jpg" alt="BM Logo" class="w-32 h-32 object-contain rounded-full shadow-lg border-2 border-[#111] bg-white">
             
             <h1 class="text-2xl font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
@@ -212,7 +211,6 @@
 
     <nav class="border-r border-[#111] w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-[#E4E4E4] overflow-x-auto overflow-y-hidden md:overflow-hidden">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-[#111]">
-            <!-- AQUÍ PUEDES PEGAR EL LINK DE TU LOGO -->
             <img src="./logobm.jpg" alt="BM Logo" class="w-16 h-16 object-contain rounded-full shadow-md border-2 border-[#111] bg-white">
             <h1 class="text-sm font-black uppercase tracking-[0.2em] text-[#111]">BMbarber</h1>
         </div>
@@ -238,10 +236,8 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube -->
-    <a href="https://psmsaas.github.io/psm/" target="_blank" class="fixed top-4 right-20 md:bottom-4 md:top-auto md:left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
-        <!-- AQUÍ PUEDES PEGAR EL LINK DE TU MARCA DE AGUA (Si no tienes, deja el span visible) -->
-        <!-- <img src="PEGAR_URL_MARCA_AGUA_AQUI" alt="PSM" class="h-6 object-contain"> -->
+    <!-- Marca de Agua y Nube (CORREGIDO PARA DISPOSITIVOS MÓVILES - TOP LEFT) -->
+    <a href="https://psmsaas.github.io/psm/" target="_blank" class="fixed top-4 left-4 md:bottom-4 md:top-auto md:left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
         <span class="text-[9px] font-black uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/50 backdrop-blur">by: PSMsaas</span>
     </a>
 
