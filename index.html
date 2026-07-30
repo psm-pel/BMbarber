@@ -236,7 +236,7 @@
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube (CORREGIDO PARA DISPOSITIVOS MÓVILES - TOP LEFT) -->
+    <!-- Marca de Agua y Nube -->
     <a href="https://psmsaas.github.io/psm/" target="_blank" class="fixed top-4 left-4 md:bottom-4 md:top-auto md:left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
         <span class="text-[9px] font-black uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/50 backdrop-blur">by: PSMsaas</span>
     </a>
@@ -333,6 +333,7 @@
         <div id="view-agenda" class="view-section hidden max-w-4xl mx-auto">
             <h2 class="text-3xl md:text-4xl font-black mb-8 tracking-tighter uppercase text-[#111]">Agenda de Clientes</h2>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Nuevo Contacto -->
                 <div class="glass-panel p-6 lg:col-span-1 bg-white/50 h-min">
                     <h3 class="text-sm uppercase tracking-widest mb-6 border-b border-[#111] pb-2 font-black">Nuevo Contacto</h3>
                     <label class="block text-[10px] uppercase tracking-widest mb-1 font-bold text-gray-700">Nombre Completo *</label>
@@ -347,12 +348,24 @@
                     <button onclick="guardarContacto()" class="w-full bg-[#111] text-[#E4E4E4] font-black py-3 uppercase text-[10px] tracking-widest hover:bg-black transition-colors">Guardar Cliente</button>
                 </div>
                 
+                <!-- Directorio -->
                 <div class="glass-panel p-6 lg:col-span-2 bg-[#E4E4E4]">
                     <div class="flex justify-between items-center mb-6 border-b border-[#111] pb-2">
                         <h3 class="text-sm uppercase tracking-widest font-black text-[#111]">Directorio</h3>
                         <input type="text" id="buscar-contacto" onkeyup="window.renderContactos()" placeholder="Buscar..." class="p-2 text-xs uppercase font-bold border-b border-[#111] bg-transparent outline-none w-32 md:w-48">
                     </div>
                     <div id="lista-contactos" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2">
+                        <!-- Generado por JS -->
+                    </div>
+                </div>
+
+                <!-- TOP 10 Clientes Frecuentes -->
+                <div class="glass-panel p-6 lg:col-span-3 bg-white/50 border-[#111]">
+                    <div class="flex items-center gap-2 mb-6 border-b border-[#111] pb-2">
+                        <i class="ph ph-star text-xl font-bold text-[#111]"></i>
+                        <h3 class="text-sm uppercase tracking-widest font-black text-[#111]">Top 10 Clientes Frecuentes</h3>
+                    </div>
+                    <div id="lista-top-clientes" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <!-- Generado por JS -->
                     </div>
                 </div>
@@ -474,7 +487,6 @@
     </main>
 
     <script>
-        // Utilidades UI
         let toastTimeout;
         window.mostrarNotificacion = function(mensaje) {
             const toast = document.getElementById('global-toast');
@@ -842,6 +854,11 @@
                 if(document.getElementById('bal-barra')) document.getElementById('bal-barra').style.width = `${porcentaje}%`;
                 if(document.getElementById('bal-porcentaje')) document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
 
+                // Actualizar contadores y tops en la agenda
+                if (typeof window.renderContactos === 'function') {
+                    window.renderContactos();
+                }
+
             } catch(e) { console.error("Error UI:", e); }
         };
 
@@ -853,6 +870,50 @@
                 } else {
                     window.localState.cortes = window.localState.cortes.filter(c => c.id !== id); window.guardarLocal(); window.actualizarUI(); window.mostrarNotificacion("Eliminado (Local)");
                 }
+            });
+        };
+
+        window.obtenerCortesPorCliente = function() {
+            const conteo = {};
+            window.localState.cortes.forEach(corte => {
+                if (corte.cliente && corte.cliente.trim() !== '') {
+                    const nombre = corte.cliente.trim().toUpperCase();
+                    conteo[nombre] = (conteo[nombre] || 0) + 1;
+                }
+            });
+            return conteo;
+        };
+
+        window.renderTopClientes = function() {
+            const contenedor = document.getElementById('lista-top-clientes');
+            if(!contenedor) return;
+            
+            const conteo = window.obtenerCortesPorCliente();
+            const ranking = Object.keys(conteo).map(nombre => ({
+                nombre: nombre,
+                cortes: conteo[nombre]
+            })).sort((a, b) => b.cortes - a.cortes).slice(0, 10);
+
+            contenedor.innerHTML = '';
+            
+            if (ranking.length === 0) {
+                contenedor.innerHTML = '<p class="text-xs text-gray-500 font-bold italic col-span-full">Aún no hay clientes con cortes registrados.</p>';
+                return;
+            }
+
+            ranking.forEach((cliente, index) => {
+                const medalla = index === 0 ? '🥇' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : `#${index + 1}`));
+                
+                const div = document.createElement('div');
+                div.className = "bg-[#E4E4E4] border border-[#111]/20 p-3 flex justify-between items-center shadow-sm hover:bg-gray-300 transition-colors";
+                div.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <span class="text-lg font-black w-6 text-center text-[#111]">${medalla}</span>
+                        <p class="text-xs font-black uppercase tracking-widest text-[#111] truncate" title="${cliente.nombre}">${cliente.nombre}</p>
+                    </div>
+                    <span class="text-[9px] font-black bg-[#111] text-[#E4E4E4] px-2 py-1 uppercase tracking-widest whitespace-nowrap">${cliente.cortes} Cortes</span>
+                `;
+                contenedor.appendChild(div);
             });
         };
 
@@ -900,16 +961,22 @@
             const filtrados = window.localState.contactos.filter(c => c.nombre.toLowerCase().includes(search) || c.telefono.includes(search));
             filtrados.sort((a,b) => a.nombre.localeCompare(b.nombre));
 
+            const conteoCortes = window.obtenerCortesPorCliente();
+
             filtrados.forEach(c => {
                 let wpLink = c.telefono ? `https://wa.me/549${c.telefono.replace(/\D/g,'')}` : '#';
                 let btnWp = c.telefono ? `<a href="${wpLink}" target="_blank" class="bg-green-500 text-white p-2 hover:bg-green-600 transition-colors flex items-center justify-center"><i class="ph ph-whatsapp text-lg"></i></a>` : '';
                 
+                const nombreNormalizado = c.nombre.trim().toUpperCase();
+                const totalCortes = conteoCortes[nombreNormalizado] || 0;
+
                 const div = document.createElement('div');
                 div.className = "bg-white/50 border border-[#111]/20 p-4 flex justify-between items-center";
                 div.innerHTML = `
                     <div class="overflow-hidden">
                         <p class="text-xs font-black uppercase tracking-widest text-[#111] truncate">${c.nombre}</p>
-                        <p class="text-[10px] font-bold text-gray-500">${c.telefono || 'Sin teléfono'} | Cumple: ${c.cumple ? c.cumple.split('-').reverse().join('/') : '--/--/----'}</p>
+                        <p class="text-[10px] font-bold text-gray-500 mb-1.5">${c.telefono || 'Sin teléfono'} | Cumple: ${c.cumple ? c.cumple.split('-').reverse().join('/') : '--/--/----'}</p>
+                        <span class="text-[8px] font-black uppercase tracking-widest text-[#111] bg-gray-300 px-1.5 py-0.5 border border-[#111]/20">Historial: ${totalCortes} Cortes</span>
                     </div>
                     <div class="flex gap-1 ml-2">
                         ${btnWp}
@@ -918,6 +985,8 @@
                 `;
                 lista.appendChild(div);
             });
+
+            window.renderTopClientes();
         };
 
         window.borrarContacto = async function(id) {
