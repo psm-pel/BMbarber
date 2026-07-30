@@ -279,7 +279,7 @@
                 <label class="block text-xs uppercase tracking-widest mb-2 font-bold text-gray-700">Monto a Cobrar (ARS)</label>
                 <input type="number" id="caja-monto" class="w-full p-4 mb-8 outline-none text-2xl font-black focus:ring-2 focus:ring-[#111]" readonly>
                 
-                <button onclick="window.registrarOperacion()" class="w-full bg-[#111] text-[#E4E4E4] font-black py-4 uppercase tracking-[0.2em] hover:bg-black transition-all shadow-md">Registrar Corte</button>
+                <button id="btn-registrar-corte" onclick="window.registrarOperacion()" class="w-full bg-[#111] text-[#E4E4E4] font-black py-4 uppercase tracking-[0.2em] hover:bg-black transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">Registrar Corte</button>
             </div>
         </div>
 
@@ -640,12 +640,19 @@
         };
 
         window.registrarOperacion = async function() {
+            const btn = document.getElementById('btn-registrar-corte');
+            if (btn) { btn.disabled = true; btn.textContent = 'REGISTRANDO...'; }
+
             const tipo = document.getElementById('caja-servicio').value;
             const metodo = document.getElementById('caja-metodo').value;
             const monto = parseFloat(document.getElementById('caja-monto').value);
             const cliente = document.getElementById('caja-cliente') ? document.getElementById('caja-cliente').value.trim() : '';
             
-            if (isNaN(monto) || monto <= 0) { window.mostrarNotificacion("Revisa el monto"); return; }
+            if (isNaN(monto) || monto <= 0) { 
+                window.mostrarNotificacion("Revisa el monto"); 
+                if (btn) { btn.disabled = false; btn.textContent = 'REGISTRAR CORTE'; }
+                return; 
+            }
 
             const nuevaOperacion = { 
                 tipo: tipo, 
@@ -671,6 +678,8 @@
 
             if(document.getElementById('caja-cliente')) document.getElementById('caja-cliente').value = '';
             if(document.getElementById('caja-metodo').value === 'amigo') document.getElementById('caja-monto').value = '';
+            
+            if (btn) { btn.disabled = false; btn.textContent = 'REGISTRAR CORTE'; }
         };
 
         function guardarLocalFallback(operacion) {
