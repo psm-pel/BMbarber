@@ -237,7 +237,7 @@
     </nav>
 
     <!-- Marca de Agua y Nube -->
-    <a href="https://psmsaas.github.io/psm/" target="_blank" class="fixed top-4 left-4 md:bottom-4 md:top-auto md:left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
+    <a href="https://psmsaas.github.io/psm/" target="_blank" class="fixed top-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
         <span class="text-[9px] font-black uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/50 backdrop-blur">by: PSMsaas</span>
     </a>
 
@@ -376,11 +376,24 @@
         <div id="view-historial" class="view-section hidden max-w-4xl mx-auto admin-only-view">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
                 <h2 class="text-3xl md:text-4xl font-black tracking-tighter uppercase text-[#111]">Historial</h2>
-                <select id="filtro-historial" onchange="window.actualizarUI()" class="p-2 text-xs outline-none border-[#111] font-bold cursor-pointer">
-                    <option value="hoy">Solo Hoy</option>
-                    <option value="periodo" selected>Periodo Actual</option>
-                    <option value="todo">Todo el Historial</option>
-                </select>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <!-- Filtro Autor -->
+                    <select id="filtro-autor" onchange="window.actualizarUI()" class="p-2 text-[10px] uppercase outline-none border border-[#111] font-bold cursor-pointer bg-[#E4E4E4] text-[#111] tracking-widest shadow-sm">
+                        <option value="todos" selected>Admin + Emp</option>
+                        <option value="admin">Solo Admin</option>
+                        <option value="empleado">Solo Empleado</option>
+                    </select>
+                    <!-- Filtro Tiempo -->
+                    <select id="filtro-tiempo" onchange="window.manejarFiltroTiempo()" class="p-2 text-[10px] uppercase outline-none border border-[#111] font-bold cursor-pointer bg-[#E4E4E4] text-[#111] tracking-widest shadow-sm">
+                        <option value="hoy">Hoy</option>
+                        <option value="semana">Esta Semana</option>
+                        <option value="mes_actual" selected>Este Mes</option>
+                        <option value="mes_especifico">Elegir Mes...</option>
+                        <option value="todo">Todo el Historial</option>
+                    </select>
+                    <!-- Selector de Mes Específico (Oculto por defecto) -->
+                    <input type="month" id="filtro-mes-input" onchange="window.actualizarUI()" class="hidden p-1.5 text-[10px] uppercase outline-none border border-[#111] font-bold bg-[#E4E4E4] text-[#111] tracking-widest shadow-sm">
+                </div>
             </div>
             <div class="glass-panel overflow-x-auto bg-white/50">
                 <table class="w-full text-left">
@@ -397,8 +410,9 @@
                 </table>
             </div>
             <div class="mt-6 flex justify-end">
-                <div class="glass-panel p-4 inline-block bg-[#111] text-[#E4E4E4]">
-                    <span class="text-[10px] uppercase tracking-widest mr-4 font-bold">Total Vista:</span>
+                <div class="glass-panel p-4 inline-flex items-center flex-wrap gap-2 md:gap-0 bg-[#111] text-[#E4E4E4]">
+                    <span id="historial-conteo" class="text-[10px] bg-[#E4E4E4] text-[#111] px-2 py-1 mr-4 font-black rounded-sm shadow-sm">0 Cortes</span>
+                    <span class="text-[10px] uppercase tracking-widest mr-4 font-bold">Recaudado:</span>
                     <span id="historial-total" class="text-xl md:text-2xl font-black">$0</span>
                 </div>
             </div>
@@ -731,6 +745,24 @@
             });
         };
 
+        // Función para revelar/ocultar el selector de mes específico en el Historial
+        window.manejarFiltroTiempo = function() {
+            const select = document.getElementById('filtro-tiempo');
+            const input = document.getElementById('filtro-mes-input');
+            if(!select || !input) return;
+            
+            if(select.value === 'mes_especifico') {
+                input.classList.remove('hidden');
+                if(!input.value) {
+                    const d = new Date();
+                    input.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                }
+            } else {
+                input.classList.add('hidden');
+            }
+            window.actualizarUI();
+        };
+
         const formatMoney = (amount) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
         const formatearFecha = (timestamp) => {
             const date = new Date(timestamp);
@@ -751,14 +783,40 @@
 
                 window.updateCajaPrice();
 
-                const filtro = document.getElementById('filtro-historial') ? document.getElementById('filtro-historial').value : 'periodo';
+                // === LÓGICA DE FILTRADO PARA EL HISTORIAL ===
+                const filtroTiempo = document.getElementById('filtro-tiempo') ? document.getElementById('filtro-tiempo').value : 'mes_actual';
+                const filtroAutor = document.getElementById('filtro-autor') ? document.getElementById('filtro-autor').value : 'todos';
+                const mesInput = document.getElementById('filtro-mes-input') ? document.getElementById('filtro-mes-input').value : '';
                 const now = new Date();
-                const inicioHoy = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
                 
                 let cortesFiltrados = window.localState.cortes.filter(corte => {
-                    if (filtro === 'hoy') return corte.timestamp >= inicioHoy;
-                    if (filtro === 'periodo') return corte.timestamp > window.localState.ultimoCierre;
-                    return true; 
+                    const fechaCorte = new Date(corte.timestamp);
+                    
+                    // 1. Filtro por Autor
+                    if (filtroAutor !== 'todos' && corte.autor !== filtroAutor) return false;
+
+                    // 2. Filtro de Tiempo
+                    if (filtroTiempo === 'hoy') {
+                        return fechaCorte.toDateString() === now.toDateString();
+                    }
+                    if (filtroTiempo === 'semana') {
+                        // Calcula el inicio de la semana (Lunes)
+                        const startOfWeek = new Date(now);
+                        const day = startOfWeek.getDay();
+                        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+                        startOfWeek.setDate(diff);
+                        startOfWeek.setHours(0,0,0,0);
+                        return fechaCorte.getTime() >= startOfWeek.getTime();
+                    }
+                    if (filtroTiempo === 'mes_actual') {
+                        return fechaCorte.getMonth() === now.getMonth() && fechaCorte.getFullYear() === now.getFullYear();
+                    }
+                    if (filtroTiempo === 'mes_especifico' && mesInput) {
+                        const [year, month] = mesInput.split('-');
+                        return fechaCorte.getFullYear() === parseInt(year) && fechaCorte.getMonth() === (parseInt(month) - 1);
+                    }
+                    // 'todo' asume true
+                    return true;
                 });
 
                 cortesFiltrados.sort((a,b) => b.timestamp - a.timestamp);
@@ -801,8 +859,9 @@
                 });
 
                 if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
+                if(document.getElementById('historial-conteo')) document.getElementById('historial-conteo').textContent = `${cortesFiltrados.length} Cortes`;
 
-                // Balance Cálculo
+                // === LÓGICA DE BALANCE (Sigue funcionando por el Periodo de Caja) ===
                 const cortesPeriodo = window.localState.cortes.filter(corte => corte.timestamp > window.localState.ultimoCierre);
                 const ingresosTotales = cortesPeriodo.reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosEfectivo = cortesPeriodo.filter(c => c.metodoPago === 'efectivo').reduce((acc, curr) => acc + curr.monto, 0);
@@ -863,7 +922,6 @@
                 if(document.getElementById('bal-barra')) document.getElementById('bal-barra').style.width = `${porcentaje}%`;
                 if(document.getElementById('bal-porcentaje')) document.getElementById('bal-porcentaje').textContent = `${porcentaje}%`;
 
-                // Actualizar contadores y tops en la agenda
                 if (typeof window.renderContactos === 'function') {
                     window.renderContactos();
                 }
