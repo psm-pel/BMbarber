@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Panel de Control - BMbarber</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -155,7 +155,7 @@
         }
     </script>
 </head>
-<body class="h-screen flex overflow-hidden relative">
+<body class="h-[100dvh] flex overflow-hidden relative">
 
     <!-- Notificación Toast -->
     <div id="global-toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 -translate-y-10 z-[100] bg-[#111] text-[#E4E4E4] px-6 py-3 text-[10px] font-bold tracking-widest uppercase opacity-0 transition-all duration-300 shadow-xl pointer-events-none border border-[#E4E4E4]">
@@ -209,6 +209,7 @@
         </div>
     </div>
 
+    <!-- Menu Navegacion -->
     <nav class="border-r border-[#111] w-full md:w-64 fixed bottom-0 md:relative z-40 md:h-full flex md:flex-col justify-around md:justify-start bg-[#E4E4E4] overflow-x-auto overflow-y-hidden md:overflow-hidden">
         <div class="hidden md:flex flex-col items-center gap-4 p-8 border-b border-[#111]">
             <img src="./logobm.jpg" alt="BM Logo" class="w-16 h-16 object-contain rounded-full shadow-md border-2 border-[#111] bg-white">
@@ -233,20 +234,23 @@
             <button onclick="window.navigate('balance')" id="nav-balance" class="nav-btn admin-only flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px]">
                 <i class="ph ph-chart-line text-xl md:text-2xl"></i> <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Balance</span>
             </button>
+            
+            <!-- Botón de Soporte (Ex Marca de Agua) -->
+            <a href="https://psmsaas.github.io/psm/" target="_blank" class="nav-btn flex-1 md:w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 p-3 md:p-4 rounded-none hover:bg-gray-300 transition-all text-[#111] min-w-[70px] border-t border-[#111]/10 md:mt-auto">
+                <img src="./psm.png" alt="PSMsaas" class="w-5 h-5 md:w-6 md:h-6 object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <i class="ph ph-headset text-xl md:text-2xl" style="display:none;"></i>
+                <span class="text-[9px] md:text-xs uppercase font-black tracking-widest">Soporte</span>
+            </a>
         </div>
     </nav>
 
-    <!-- Marca de Agua y Nube -->
-    <a href="https://psmsaas.github.io/psm/" target="_blank" class="fixed top-4 left-4 z-50 flex items-center gap-3 opacity-50 hover:opacity-100 transition-all pointer-events-auto cursor-pointer">
-        <span class="text-[9px] font-black uppercase tracking-widest text-[#111] border border-[#111] p-1 bg-[#E4E4E4]/50 backdrop-blur">by: PSMsaas</span>
-    </a>
-
-    <div id="cloud-status" class="fixed top-4 right-4 md:bottom-4 md:top-auto md:right-4 z-50 flex items-center gap-2 px-2 py-1 border border-[#111] bg-[#E4E4E4] cursor-default shadow-sm" title="Conectando...">
-        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-[#111] text-base transition-colors duration-300"></i>
-        <span id="cloud-text" class="text-[8px] font-black uppercase tracking-widest text-[#111] transition-colors duration-300">Cargando</span>
+    <!-- Indicador Nube Limpio -->
+    <div id="cloud-status" class="fixed top-6 right-6 md:top-6 md:right-8 z-50 pointer-events-none" title="Conectando...">
+        <i id="cloud-icon" class="ph ph-spinner-gap animate-spin text-[#111] text-3xl transition-colors duration-300 drop-shadow-md"></i>
     </div>
 
-    <main class="flex-1 h-full overflow-y-auto p-4 md:p-12 pb-24 md:pb-8">
+    <!-- MAIN CON PADDING TOP (pt-16) PARA EVITAR QUE SE CORTE EN IPHONE -->
+    <main class="flex-1 h-full overflow-y-auto p-4 pt-16 md:pt-12 md:p-12 pb-28 md:pb-8">
         
         <!-- VISTA CAJA -->
         <div id="view-caja" class="view-section max-w-lg mx-auto">
@@ -536,15 +540,12 @@
 
         window.actualizarEstadoNube = function(conectado) {
             const icon = document.getElementById('cloud-icon');
-            const text = document.getElementById('cloud-text');
-            if(conectado) {
-                icon.className = "ph ph-cloud-check text-green-600 text-lg transition-colors";
-                text.className = "text-[8px] font-black uppercase tracking-widest text-green-600 transition-colors";
-                text.textContent = "Online";
-            } else {
-                icon.className = "ph ph-cloud-slash text-red-600 text-lg transition-colors";
-                text.className = "text-[8px] font-black uppercase tracking-widest text-red-600 transition-colors";
-                text.textContent = "Local";
+            if(icon) {
+                if(conectado) {
+                    icon.className = "ph ph-cloud-check text-[#22c55e] text-3xl transition-colors drop-shadow-md";
+                } else {
+                    icon.className = "ph ph-cloud-slash text-red-600 text-3xl transition-colors drop-shadow-md";
+                }
             }
         };
 
@@ -587,7 +588,8 @@
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('btn-active'));
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
-            document.getElementById(`nav-${viewName}`).classList.add('btn-active');
+            const navBtn = document.getElementById(`nav-${viewName}`);
+            if(navBtn) navBtn.classList.add('btn-active');
             window.actualizarUI();
         };
 
@@ -745,7 +747,6 @@
             });
         };
 
-        // Función para revelar/ocultar el selector de mes específico en el Historial
         window.manejarFiltroTiempo = function() {
             const select = document.getElementById('filtro-tiempo');
             const input = document.getElementById('filtro-mes-input');
@@ -783,7 +784,6 @@
 
                 window.updateCajaPrice();
 
-                // === LÓGICA DE FILTRADO PARA EL HISTORIAL ===
                 const filtroTiempo = document.getElementById('filtro-tiempo') ? document.getElementById('filtro-tiempo').value : 'mes_actual';
                 const filtroAutor = document.getElementById('filtro-autor') ? document.getElementById('filtro-autor').value : 'todos';
                 const mesInput = document.getElementById('filtro-mes-input') ? document.getElementById('filtro-mes-input').value : '';
@@ -792,15 +792,12 @@
                 let cortesFiltrados = window.localState.cortes.filter(corte => {
                     const fechaCorte = new Date(corte.timestamp);
                     
-                    // 1. Filtro por Autor
                     if (filtroAutor !== 'todos' && corte.autor !== filtroAutor) return false;
 
-                    // 2. Filtro de Tiempo
                     if (filtroTiempo === 'hoy') {
                         return fechaCorte.toDateString() === now.toDateString();
                     }
                     if (filtroTiempo === 'semana') {
-                        // Calcula el inicio de la semana (Lunes)
                         const startOfWeek = new Date(now);
                         const day = startOfWeek.getDay();
                         const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
@@ -815,7 +812,6 @@
                         const [year, month] = mesInput.split('-');
                         return fechaCorte.getFullYear() === parseInt(year) && fechaCorte.getMonth() === (parseInt(month) - 1);
                     }
-                    // 'todo' asume true
                     return true;
                 });
 
@@ -861,7 +857,6 @@
                 if(document.getElementById('historial-total')) document.getElementById('historial-total').textContent = formatMoney(totalVista);
                 if(document.getElementById('historial-conteo')) document.getElementById('historial-conteo').textContent = `${cortesFiltrados.length} Cortes`;
 
-                // === LÓGICA DE BALANCE (Sigue funcionando por el Periodo de Caja) ===
                 const cortesPeriodo = window.localState.cortes.filter(corte => corte.timestamp > window.localState.ultimoCierre);
                 const ingresosTotales = cortesPeriodo.reduce((acc, curr) => acc + curr.monto, 0);
                 const ingresosEfectivo = cortesPeriodo.filter(c => c.metodoPago === 'efectivo').reduce((acc, curr) => acc + curr.monto, 0);
